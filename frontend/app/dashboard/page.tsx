@@ -23,7 +23,7 @@ export default function Dashboard() {
   const { data: stBalance } = useBalance({
     address,
     token: st?.address,
-    query: { enabled: !!address && !!st?.address },
+    query: { enabled: !!address && !!st?.address, refetchInterval: 15_000 },
   });
 
   // Native gas balance. Read separately from the settlement token because it is not an ERC20
@@ -31,7 +31,7 @@ export default function Dashboard() {
   // fail for gas while their stock balances look healthy.
   const { data: nativeBalance } = useBalance({
     address,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 15_000 },
   });
 
   const held = assets.filter((a) => a.balance !== undefined && a.balance > 0n);

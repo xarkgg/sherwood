@@ -21,7 +21,7 @@ export default function Vault() {
   const { data: stBalance } = useBalance({
     address,
     token: st?.address,
-    query: { enabled: !!address && !!st?.address },
+    query: { enabled: !!address && !!st?.address, refetchInterval: 15_000 },
   });
 
   const { data: allowance } = useReadContract({
@@ -29,7 +29,8 @@ export default function Vault() {
     abi: erc20Abi,
     functionName: "allowance",
     args: address && deployed ? [address, deployed.vault] : undefined,
-    query: { enabled: !!address && !!deployed && !!st?.address },
+    // Same polling as the balances: an approval must flip the deposit CTA without a reload.
+    query: { enabled: !!address && !!deployed && !!st?.address, refetchInterval: 15_000 },
   });
 
   const { writeContract, data: txHash, isPending: isWriting, error } = useWriteContract();
