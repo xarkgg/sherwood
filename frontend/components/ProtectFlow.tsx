@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import Image from "next/image";
 import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { formatUnits } from "viem";
-import { SegmentedControl, Eyebrow, TxStatus, type TxFail } from "@/components/ui";
+import { decodeEventLog, formatUnits } from "viem";
+import { SegmentedControl, Eyebrow, TxStatus, IconAlert, type TxFail } from "@/components/ui";
 import { TokenLogo } from "@/components/TokenLogo";
 import { useDeployed, useAssets, settlementTokenFor, parseTokenAmount, usd18ToToken } from "@/lib/protocol";
 import { noteAbi, erc20Abi } from "@/lib/abis";
-import { fmtUsd18, fmtPrice, fmtExpiry, fmtQty } from "@/lib/format";
+import { robinhoodTestnet } from "@/lib/chain";
+import { NETWORK } from "@/lib/network";
+import { fmtUsd18, fmtPrice, fmtExpiry, fmtQty, fmtToken } from "@/lib/format";
 
 /**
  * The buy-protection flow, in one place.
@@ -58,40 +61,115 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
   const overPosition = amountWei > 0n && held !== undefined && held < amountWei;
 
   // The quote is read from the chain — the UI never prices anything itself.
-  const { data: quote } = useReadContract({
+  const quoteQuery = useReadContract({
     ...{ address: deployed?.note, abi: noteAbi },
     functionName: "quote",
     args: deployed && selected && amountWei > 0n ? [selected.token, amountWei, level, duration] : undefined,
-    query: { enabled: !!deployed && !!selected && amountWei > 0n },
+    query: { enabled: !!deployed && !!selected && amountWei > 0n, refetchInterval: 30_000 },
   });
+  const quote = quoteQuery.data;
 
   const premiumUSD18 = quote?.[0];
   const protectedUSD18 = quote?.[1];
   const premiumToken = premiumUSD18 !== undefined ? usd18ToToken(premiumUSD18, st?.decimals ?? 6) : 0n;
 
-  const { data: allowance } = useReadContract({
+  const {
+    data: allowance,
+    refetch: refetchAllowance,
+  } = useReadContract({
     address: st?.address,
     abi: erc20Abi,
     functionName: "allowance",
     args: address && deployed ? [address, deployed.vault] : undefined,
-    query: { enabled: !!address && !!deployed && !!st?.address },
+    // Poll with the balances: an approval must flip the CTA on its own, and a stale
+    // allowance cache is what left the button greyed on "Approve first" forever.
+    query: { enabled: !!address && !!deployed && !!st?.address, refetchInterval: 15_000 },
   });
 
-  const { writeContract, data: txHash, isPending, error } = useWriteContract();
-  const receipt = useWaitForTransactionReceipt({ hash: txHash });
+  // Approve and create get separate write slots. Sharing one meant the approval receipt
+  // was celebrated as "Protection created", and the create flow inherited the approval's
+  // transaction state.
+  const {
+    writeContract: writeApprove,
+    data: approveHash,
+    isPending: approveWaiting,
+    error: approveError,
+  } = useWriteContract();
+  const approveReceipt = useWaitForTransactionReceipt({ hash: approveHash });
 
-  const needsApproval = quote && allowance !== undefined && allowance < premiumToken;
-  const canCreate = isConnected && !!deployed && !!quote && holdsEnough && !needsApproval && !isPending && !receipt.isLoading;
-  const canApprove = isConnected && !!deployed && !!quote && !!needsApproval && !isPending && !receipt.isLoading;
+  const {
+    writeContract: writeCreate,
+    data: createHash,
+    isPending: createWaiting,
+    error: createError,
+  } = useWriteContract();
+  const createReceipt = useWaitForTransactionReceipt({ hash: createHash });
+
+  // Terms at the moment the create was submitted — the confirmation card shows what was
+  // actually bought, not whatever the quote box has drifted to since.
+  const submitted = useRef<{
+    qty: string;
+    symbol: string;
+    level: string;
+    duration: string;
+    premiumToken: bigint;
+    premiumUSD18: bigint;
+    protectedUSD18: bigint;
+    expiry: bigint;
+  } | null>(null);
+
+  const [successOpen, setSuccessOpen] = useState(false);
+  useEffect(() => {
+    if (createReceipt.isSuccess) setSuccessOpen(true);
+  }, [createReceipt.isSuccess]);
+
+  // The note id only exists on-chain: read it from the NoteCreated log of the confirmed
+  // receipt — never from local arithmetic.
+  const createdNoteId = useMemo(() => {
+    for (const log of createReceipt.data?.logs ?? []) {
+      try {
+        const ev = decodeEventLog({ abi: noteAbi, data: log.data, topics: log.topics, strict: false });
+        if (ev.eventName === "NoteCreated") return (ev.args as unknown as { noteId: bigint }).noteId;
+      } catch {
+        // A log from another contract in the same receipt; try the next one.
+      }
+    }
+    return undefined;
+  }, [createReceipt.data]);
+
+  useEffect(() => {
+    if (approveReceipt.isSuccess) refetchAllowance();
+  }, [approveReceipt.isSuccess, refetchAllowance]);
+
+  const approving = approveWaiting || approveReceipt.isLoading;
+  const buying = createWaiting || createReceipt.isLoading;
+  const needsApproval = !!quote && allowance !== undefined && allowance < premiumToken;
+  const allowanceUnknown = !!quote && allowance === undefined;
+
+  const readyToAct = isConnected && !!deployed && chainId === robinhoodTestnet.id && !!selected;
+  const canApprove = readyToAct && !!quote && !!needsApproval && !approving && !buying;
+  const canCreate =
+    readyToAct && !!quote && holdsEnough && !needsApproval && !allowanceUnknown && !approving && !buying;
 
   function approve() {
-    if (!deployed || !st) return;
-    writeContract({ address: st.address, abi: erc20Abi, functionName: "approve", args: [deployed.vault, premiumToken] });
+    if (!deployed || !st || !premiumToken) return;
+    writeApprove({ address: st.address, abi: erc20Abi, functionName: "approve", args: [deployed.vault, premiumToken] });
   }
 
   function create() {
-    if (!deployed || !selected) return;
-    writeContract({
+    if (!deployed || !selected || !quote || !st) return;
+    const [premiumUSD, protectedUSD, expiry] = quote;
+    submitted.current = {
+      qty: fmtQty(amountWei, selected.decimals),
+      symbol: selected.symbol,
+      level: LEVELS.find((l) => l.value === level)?.label ?? "",
+      duration: DURATIONS.find((d) => d.value === duration)?.label ?? "",
+      premiumToken: usd18ToToken(premiumUSD, st.decimals),
+      premiumUSD18: premiumUSD,
+      protectedUSD18: protectedUSD,
+      expiry,
+    };
+    writeCreate({
       address: deployed.note,
       abi: noteAbi,
       functionName: "create",
@@ -99,29 +177,79 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     });
   }
 
-  const failReason = error
-    ? /InsufficientPosition/.test(`${error.message} ${(error as { shortMessage?: string }).shortMessage ?? ""}`)
+  function resetFlow() {
+    setSuccessOpen(false);
+    setAmount("");
+    submitted.current = null;
+  }
+
+  const createFail = createError
+    ? /InsufficientPosition/.test(`${createError.message} ${(createError as { shortMessage?: string }).shortMessage ?? ""}`)
       ? "you must hold the stock you are protecting — reduce the amount"
-      : error.message.slice(0, 120)
+      : createError.message.slice(0, 120)
     : null;
-  const txState: TxFail | null = isPending
-    ? { kind: "pending", text: "Confirm in wallet…" }
-    : receipt.isLoading
-      ? { kind: "busy", text: "Waiting for confirmation…" }
-      : receipt.isSuccess
-        ? { kind: "success", text: "Protection created — see your notes" }
-        : failReason
-          ? { kind: "error", text: `Failed: ${failReason}` }
+
+  const quoteFail = quoteQuery.error
+    ? /0x19abf40e|StalePrice/.test(`${quoteQuery.error.message} ${(quoteQuery.error as { shortMessage?: string }).shortMessage ?? ""}`)
+    : false;
+
+  // One honest line for whatever stands between the user and the CTA, rendered above it —
+  // a greyed button with no stated reason reads as a broken page.
+  const blocker = !isConnected
+    ? "Connect your wallet to buy protection."
+    : chainId !== robinhoodTestnet.id
+      ? "Switch to Robinhood Chain testnet — that is where the protocol lives."
+      : !selected
+        ? "Select a stock token."
+        : amountWei === 0n
+          ? "Enter the amount you want to protect."
+          : overPosition
+            ? `You hold ${fmtQty(held, selected.decimals, selected.symbol)} — you can't protect more than you own.`
+            : quoteQuery.isError
+              ? quoteFail
+                ? "The price feed for this stock is stale — a fresh price has to be written before it can be quoted."
+                : "The chain didn't return a quote — adjust the amount or try again."
+              : !quote
+                ? "Getting your quote from the chain…"
+                : allowanceUnknown
+                  ? "Checking your USDG allowance…"
+                  : needsApproval
+                    ? `The vault needs a ${st?.symbol ?? "USDG"} allowance before it can collect the premium.`
+                    : null;
+
+  const txState: TxFail | null = successOpen
+    ? null
+    : createWaiting
+      ? { kind: "pending", text: "Confirm in wallet…" }
+      : createReceipt.isLoading
+        ? { kind: "busy", text: "Waiting for confirmation…" }
+        : createFail
+          ? { kind: "error", text: `Failed: ${createFail}` }
           : null;
 
   const positionValue = (amountWei * (selected?.price8 ?? 0n)) / 10n ** 8n;
 
-  const actions = (
+  const blockerLine = blocker ? (
+    <p className="flex items-start gap-2 text-xs leading-relaxed text-mist">
+      <IconAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-pending" />
+      {blocker}
+    </p>
+  ) : null;
+
+  const actions = successOpen ? null : (
     <div className="space-y-3">
+      {blockerLine}
       {needsApproval ? (
-        <button onClick={approve} disabled={!canApprove} className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm">
-          Approve {st?.symbol ?? "token"}
-        </button>
+        <div className="space-y-1">
+          <button onClick={approve} disabled={!canApprove} className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm">
+            {approving ? "Approving…" : `Approve ${st?.symbol ?? "USDG"}`}
+          </button>
+          {approveError ? (
+            <p className="text-xs text-loss">
+              {(approveError as { shortMessage?: string }).shortMessage ?? approveError.message}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       <button onClick={create} disabled={!canCreate} className="btn-action w-full rounded-2xl px-4 py-3.5 text-sm">
         {needsApproval ? "Approve first" : overPosition ? "More than you hold" : "Buy protection"}
@@ -129,6 +257,51 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
       <TxStatus state={txState} />
     </div>
   );
+
+  // Confirmation card. Gated on the create receipt being confirmed on-chain — never on
+  // the wallet having merely submitted the transaction.
+  const bought = submitted.current;
+  const success =
+    successOpen && createReceipt.isSuccess && bought ? (
+      <div className="inset-card rise rounded-3xl border border-action/40 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Eyebrow>Protection active</Eyebrow>
+            <div className="mt-1 font-display text-2xl font-bold tracking-tight">
+              Note #{createdNoteId !== undefined ? createdNoteId.toString() : "…"}
+            </div>
+          </div>
+          <Image src="/scroll.png" alt="" width={1024} height={381} priority className="h-16 w-auto shrink-0 object-contain" />
+        </div>
+        <dl className="mt-5 space-y-2.5 text-sm">
+          <Row label="Position" value={`${bought.qty} ${bought.symbol}`} />
+          <Row label="Floor" value={fmtUsd18(bought.protectedUSD18)} />
+          <Row
+            label="Duration"
+            value={`${bought.duration} · expires ${fmtExpiry(bought.expiry)}`}
+          />
+          <Row
+            label="Premium paid"
+            value={`${fmtToken(bought.premiumToken, st?.decimals ?? 6, st?.symbol)} (${fmtUsd18(bought.premiumUSD18)})`}
+          />
+        </dl>
+        {createHash ? (
+          <a
+            href={`${NETWORK.explorer}/tx/${createHash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="tnum mt-4 inline-flex items-center gap-1.5 text-xs text-action hover:underline"
+          >
+            {`${createHash.slice(0, 12)}…${createHash.slice(-8)}`} — view on the explorer ↗
+          </a>
+        ) : null}
+        <div className="mt-5">
+          <button type="button" onClick={resetFlow} className="text-xs text-mist hover:text-ink hover:underline">
+            Protect another position
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   /* ------------------------------------------------------------------ card variant —
    * The dashboard panel: From (your position) → To (your floor) → fee → CTA. */
@@ -221,7 +394,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
           </p>
         ) : null}
 
-        <div className="mt-auto pt-5">{actions}</div>
+        <div className="mt-auto pt-5">{success ?? actions}</div>
       </div>
     );
   }
@@ -339,7 +512,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
             </p>
           )}
 
-          <div className="mt-6">{actions}</div>
+          <div className="mt-6">{success ?? actions}</div>
         </div>
       </div>
     </div>
