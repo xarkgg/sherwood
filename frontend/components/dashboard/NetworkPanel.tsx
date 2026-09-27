@@ -3,6 +3,7 @@ import { toHex } from "viem";
 import { Eyebrow } from "@/components/ui";
 import { robinhoodTestnet } from "@/lib/chain";
 import { NETWORK, FAUCET_REACHABLE, MAINNET_WARNING } from "@/lib/network";
+import type { Eip1193Provider } from "@/lib/wallets";
 
 /**
  * The network card: which chain this app talks to, and where testnet gas comes from.
@@ -26,11 +27,13 @@ export function NetworkPanel() {
   const [addBusy, setAddBusy] = useState(false);
   const [addNote, setAddNote] = useState<string | null>(null);
   useEffect(() => {
-    setHasInjected(Boolean(window.ethereum ?? window.okxWallet));
+    setHasInjected(Boolean(window.ethereum));
   }, []);
 
   async function addTestnetToWallet() {
-    const provider = window.ethereum ?? window.okxWallet;
+    // AppKit's ambient declaration shadows window.ethereum as Record<string, unknown>,
+    // erasing request(): cast back to the EIP-1193 surface we are actually calling.
+    const provider = window.ethereum as Eip1193Provider | undefined;
     if (!provider) return;
     setAddBusy(true);
     setAddNote(null);
