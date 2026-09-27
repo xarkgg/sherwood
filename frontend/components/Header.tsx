@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from "wagmi";
 import { robinhoodTestnet } from "@/lib/chain";
 import { connectTarget, describeConnectError } from "@/lib/connect";
+import { appkit } from "@/lib/appkit";
 import { IconShield, IconGauge, IconFile, IconVault, IconArrow } from "@/components/ui";
 import { WalletIcon } from "@/components/WalletIcon";
 
@@ -90,10 +91,12 @@ function ConnectButton() {
     );
   }
 
-  // One tap, straight into WalletConnect's own chooser — the modal it ships with decides
-  // which wallet, lists the real ones, and deep-links on mobile. Closing that modal
-  // without approving aborts the pairing attempt, so the button is live again for a
-  // retry and the only thing left on screen is a short calm note.
+  // One tap, straight into the wallet chooser. With a WalletConnect project id the
+  // modal is AppKit's: it lists installed browser extensions (MetaMask, OKX, …) and
+  // connects them directly on desktop, deep-links phone wallets — the same
+  // list-and-tap flow as mobile — and falls back to a QR. Without a project id the
+  // modal doesn't exist and connect is the browser's injected wallet. Closing any
+  // modal without approving aborts the attempt, so the button stays live for a retry.
   const target = connectTarget(connectors);
   const note = describeConnectError(error ?? null);
   return (
@@ -104,7 +107,13 @@ function ConnectButton() {
         </span>
       ) : null}
       <button
-        onClick={() => target && connect({ connector: target, chainId: robinhoodTestnet.id })}
+        onClick={() => {
+          if (appkit.modal) {
+            appkit.modal.open();
+            return;
+          }
+          if (target) connect({ connector: target, chainId: robinhoodTestnet.id });
+        }}
         disabled={!target || isPending}
         className="btn-action inline-flex shrink-0 items-center gap-2 rounded-full px-5 py-2.5 text-sm disabled:opacity-60"
       >
