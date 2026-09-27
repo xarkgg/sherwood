@@ -24,9 +24,9 @@ import { fmtUsd18, fmtPrice, fmtExpiry, fmtQty } from "@/lib/format";
 const DAY = 24n * 60n * 60n;
 
 const LEVELS = [
-  { label: "70%", value: 70n * 10n ** 16n, hint: "covers 30% drops" },
-  { label: "80%", value: 80n * 10n ** 16n, hint: "covers 20% drops" },
-  { label: "90%", value: 90n * 10n ** 16n, hint: "covers 10% drops" },
+  { label: "70%", value: 70n * 10n ** 16n, hint: "protects if price drops 30%" },
+  { label: "80%", value: 80n * 10n ** 16n, hint: "protects if price drops 20%" },
+  { label: "90%", value: 90n * 10n ** 16n, hint: "protects if price drops 10%" },
 ];
 
 const DURATIONS = [
@@ -150,7 +150,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
 
         {/* From */}
         <div className="mt-3 rounded-2xl bg-surface-3 p-4">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-mist">From · the stock you hold</div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-mist">Stock you hold</div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <input
               value={amount}
@@ -186,7 +186,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
 
         {/* To */}
         <div className="rounded-2xl bg-surface-3 p-4">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-mist">To · your floor</div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-mist">Your floor price</div>
           <div className="tnum mt-2 font-display text-3xl font-bold tracking-tight">
             {protectedUSD18 !== undefined ? fmtUsd18(protectedUSD18) : "—"}
           </div>
@@ -208,7 +208,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
 
         <div className="mt-4 flex items-center justify-between gap-3 text-xs text-mist">
           <span>
-            ⓘ Paid up front and not refundable — the vault keeps the cost whether or not the price ever drops.
+            ⓘ Paid up front, non-refundable — the cost is paid regardless of whether price drops.
           </span>
           <span className="tnum shrink-0 rounded-xl bg-surface-3 px-3 py-1.5 text-ink">
             {premiumUSD18 !== undefined ? `${fmtUsd18(premiumUSD18)} cost` : "cost —"}
@@ -326,10 +326,10 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
                 </div>
               </div>
               <dl className="mt-6 space-y-3 text-sm">
-                <Row label="What you're protecting" value={fmtUsd18(positionValue)} />
-                <Row label="Price now (from the chain)" value={fmtPrice(selected?.price8)} />
-                <Row label="Your floor" value={fmtUsd18(protectedUSD18)} />
-                <Row label="Most you can receive" value={fmtUsd18(protectedUSD18)} />
+                <Row label="Value you're protecting" value={fmtUsd18(positionValue)} />
+                <Row label="Current price" value={fmtPrice(selected?.price8)} />
+                <Row label="Floor price" value={fmtUsd18(protectedUSD18)} />
+                <Row label="Maximum payout" value={fmtUsd18(protectedUSD18)} />
                 <Row label="Expires" value={fmtExpiry(quote[2])} />
               </dl>
             </>

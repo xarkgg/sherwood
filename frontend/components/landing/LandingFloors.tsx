@@ -72,7 +72,7 @@ export function LandingFloors() {
           <select
             value={String(duration)}
             onChange={(e) => setDuration(BigInt(e.target.value))}
-            aria-label="Cover duration"
+            aria-label="Protection duration"
             className="cursor-pointer appearance-none bg-transparent text-xs font-bold text-black outline-none"
           >
             {DURATIONS.map((d) => (
@@ -117,7 +117,7 @@ export function LandingFloors() {
       )}
 
       {deployed && activeAssets.length > 0 && loadingQuotes ? (
-        <p className="mt-4 text-center text-[11px] text-mist">Reading cover costs from the chain…</p>
+        <p className="mt-4 text-center text-[11px] text-mist">Reading protection costs from the chain…</p>
       ) : null}
     </div>
   );
@@ -183,8 +183,8 @@ function FloorCard({
             </div>
             <p className="tnum mt-1.5 text-[11px] text-mist">
               {premiumUSD18 !== undefined
-                ? `${durationLabel} cover on 1 ${asset.symbol} from ${fmtUsd18(premiumUSD18)}`
-                : "cover cost reads from the chain"}
+                ? `${durationLabel} protection for 1 ${asset.symbol} costs ${fmtUsd18(premiumUSD18)}`
+                : "protection cost reads from the chain"}
             </p>
           </>
         ) : (

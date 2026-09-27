@@ -47,9 +47,8 @@ export default function Landing() {
               Cap your losses.
             </h1>
             <p className="mx-auto mt-5 max-w-md text-sm font-medium leading-relaxed text-fog">
-              Sherwood puts a floor under the tokenized stocks you hold on Robinhood Chain.
-              Pick a floor, pay a fixed cost up front — if the price falls through it, the
-              vault pays you the gap. Settled against prices read from the chain.
+              Sherwood puts a floor under the Stock Tokens you hold on Robinhood Chain.
+              Pick a floor, pay a fixed cost up front — if the price falls through it, you’re reimbursed the difference. Settled against prices read from the chain.
             </p>
             <Link
               href={APP_URL}

@@ -35,7 +35,7 @@ export default function Protect() {
           </h1>
           <p className="mt-2 text-sm text-mist">
             Choose a stock you hold and the price you want protected. You keep everything above it, and if the price
-            falls below it the vault pays you the difference. The cost is set on-chain and never changes after you buy.
+            falls below it you’re reimbursed the difference. The cost is fixed at purchase.
           </p>
         </section>
 

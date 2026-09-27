@@ -141,7 +141,7 @@ export default function Dashboard() {
               <EmptyState
                 icon={<IconFile className="h-6 w-6" />}
                 title="Nothing protected yet"
-                body="Pick a stock you own, choose how much to cover and for how long. You keep every gain above your floor."
+                body="Pick a stock you own, choose how much to protect and for how long. You keep every gain above your floor."
                 actionHref="/protect"
                 actionLabel="Buy protection"
               />
