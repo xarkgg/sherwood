@@ -23,7 +23,7 @@ const CHAIN_NAMES: Record<number, string> = {
 };
 
 function ConnectButton() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, status } = useAccount();
   const { disconnect } = useDisconnect();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -114,10 +114,10 @@ function ConnectButton() {
           }
           if (target) connect({ connector: target, chainId: robinhoodTestnet.id });
         }}
-        disabled={!target || isPending}
+        disabled={!target || isPending || status === "reconnecting"}
         className="btn-action inline-flex shrink-0 items-center gap-2 rounded-full px-5 py-2.5 text-sm disabled:opacity-60"
       >
-        {isPending ? "Waiting for wallet..." : "Connect wallet"}
+        {status === "reconnecting" ? "Reconnecting…" : isPending ? "Waiting for wallet..." : "Connect wallet"}
         <IconArrow className="h-4 w-4" />
       </button>
     </div>

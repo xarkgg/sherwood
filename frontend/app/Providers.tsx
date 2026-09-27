@@ -1,6 +1,7 @@
 "use client";
 
-import { WagmiProvider, createConfig, http } from "wagmi";
+import { useEffect, useRef } from "react";
+import { WagmiProvider, createConfig, http, useAccount, useReconnect } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { injected } from "wagmi/connectors";
 import { createAppKit } from "@reown/appkit/react";
@@ -60,10 +61,42 @@ if (wcProjectId) {
   });
 }
 
+/**
+ * One retry for the reload-restore path. wagmi already attempts reconnection on mount
+ * (Hydrate's reconnectOnMount defaults true), but a failed attempt is silent: the
+ * connection state is cleared and the app just shows "Connect wallet". On a flaky
+ * WalletConnect relay the second attempt a few seconds later is what actually restores
+ * the session. Gated on a sessionStorage flag so fresh visitors never trigger the extra
+ * connector scan, and explicit disconnects stay respected — disconnecting revokes
+ * connector authorization, so the retry finds nothing to restore.
+ */
+function RestoreSession() {
+  const { status, isConnected } = useAccount();
+  const { reconnect } = useReconnect();
+  const retried = useRef(false);
+
+  useEffect(() => {
+    if (isConnected) {
+      sessionStorage.setItem("sherwood:had-session", "1");
+      return;
+    }
+    if (status !== "disconnected" || retried.current) return;
+    if (sessionStorage.getItem("sherwood:had-session") !== "1") return;
+    retried.current = true;
+    const t = setTimeout(() => reconnect(), 4000);
+    return () => clearTimeout(t);
+  }, [status, isConnected, reconnect]);
+
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <RestoreSession />
+        {children}
+      </QueryClientProvider>
     </WagmiProvider>
   );
 }
