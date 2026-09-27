@@ -1,0 +1,43 @@
+name: refresh-demo-feeds
+
+# The testnet demo runs on owner-written DemoFeeds — Robinhood Chain testnet publishes
+# no stock feeds — and the protocol refuses to quote or settle against a price older
+# than each asset's staleness bound (3 days). Without this cron, any reviewer opening
+# the app a few days after the last manual demo sees StalePrice on every quote.
+#
+# FEED_WRITER_KEY signs the price writes. DemoFeed.owner is immutable (set at deploy),
+# so this must be the deployer key — keep it a testnet-only key, never a mainnet one.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily 06:00 UTC — bound is 3 days, this leaves margin
+  workflow_dispatch: {}
+
+concurrency:
+  group: refresh-demo-feeds
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Refresh feed prices
+        env:
+          REGISTRY: "0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7"
+          PRIVATE_KEY: ${{ secrets.FEED_WRITER_KEY }}
+        run: forge script script/RefreshFeeds.s.sol --rpc-url https://rpc.testnet.chain.robinhood.com/rpc --broadcast -vvvv
+
+      - name: Verify TSLA feed is fresh
+        env:
+          FEED: "0x9b1be514E2dBAA52FB37B52f65E57885FD5c67D8"
+        run: |
+          NOW=$(date +%s)
+          UPD=$(cast call "$FEED" "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url https://rpc.testnet.chain.robinhood.com/rpc | sed -n 4p | cut -d'[' -f1 | tr -d '[:space:]')
+          AGE=$((NOW - UPD))
+          echo "TSLA feed age: ${AGE}s"
+          test "$AGE" -lt 259200
