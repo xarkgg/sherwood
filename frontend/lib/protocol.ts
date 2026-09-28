@@ -96,10 +96,12 @@ export function useAssets(): { assets: AssetView[]; isLoading: boolean } {
     allowFailure: true,
     // Poll so balances move without a reload — funding a wallet from outside the app
     // (faucet, transfer) is the normal testnet path and nothing else refires these reads.
-    query: { enabled: tokens.length > 0, refetchInterval: 15_000 },
+    // Gate on a connected address to avoid querying balanceOf(zeroAddress) on first render
+    // which would cache a zero and make later assets appear empty.
+    query: { enabled: !!deployed && !!address && tokens.length > 0, refetchInterval: 15_000 },
     contracts: tokens.flatMap((t) => [
       { address: deployed?.registry, abi: registryAbi, functionName: "getAsset", args: [t] } as const,
-      { address: t, abi: erc20Abi, functionName: "balanceOf", args: [address ?? zeroAddress] } as const,
+      { address: t, abi: erc20Abi, functionName: "balanceOf", args: [address] } as const,
       { address: t, abi: erc20Abi, functionName: "decimals" } as const,
       { address: t, abi: erc20Abi, functionName: "name" } as const,
     ]),

@@ -524,7 +524,7 @@ function AssetSelect({
   value,
   onChange,
 }: {
-  assets: { token: string; symbol: string; price8: bigint | undefined; decimals: number }[];
+  assets: { token: string; symbol: string; name?: string; price8: bigint | undefined; decimals: number; balance?: bigint }[];
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -547,15 +547,15 @@ function AssetSelect({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2"
+        className="flex items-center gap-2 min-w-[120px] justify-between"
       >
-        <span className="text-sm text-ink">{selected ? selected.symbol : "Select"}</span>
+        <span className="truncate text-sm text-ink">{selected ? selected.name ?? selected.symbol : "Select"}</span>
         <span className="text-[10px] text-mist">▼</span>
       </button>
       {open && (
-        <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-2xl border border-line bg-surface-2 shadow-xl">
+        <div className="absolute right-0 left-auto w-[320px] top-full z-20 mt-2 max-h-80 overflow-auto rounded-2xl border border-line bg-surface-2 shadow-xl p-1">
           {assets.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-mist">No active assets</div>
+            <div className="px-3 py-3 text-xs text-mist">No active assets</div>
           ) : (
             assets.map((a) => (
               <button
@@ -565,13 +565,19 @@ function AssetSelect({
                   onChange(a.token);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/[0.04] ${
-                  a.token === value ? "text-ink" : "text-fog"
+                className={`flex w-full items-center gap-3 px-3 py-3 text-left rounded-xl transition-colors hover:bg-white/[0.04] ${
+                  a.token === value ? "bg-white/[0.04]" : ""
                 }`}
               >
-                <TokenLogo symbol={a.symbol} className="h-5 w-5" />
-                <span className="flex-1">{a.symbol}</span>
-                <span className="tnum text-xs text-mist">{fmtPrice(a.price8)}</span>
+                <TokenLogo symbol={a.symbol} className="h-7 w-7 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-ink">{a.name ?? a.symbol}</div>
+                  <div className="truncate text-[11px] text-mist">{a.symbol} · {fmtPrice(a.price8)}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="tnum text-xs text-ink">{a.balance !== undefined ? fmtQty(a.balance, a.decimals) : "—"}</div>
+                  <div className="tnum text-[10px] text-mist">balance</div>
+                </div>
               </button>
             ))
           )}
