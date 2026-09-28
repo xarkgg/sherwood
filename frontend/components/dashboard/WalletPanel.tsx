@@ -20,6 +20,7 @@ export function WalletPanel({
   assets,
   decimalsOf,
   nativeBalance,
+  settlement,
 }: {
   address: string | undefined;
   isConnected: boolean;
@@ -28,6 +29,8 @@ export function WalletPanel({
   /** Native gas balance (ETH). Symbol is not read from the chain: this RPC answers nothing
    *  for eth_symbol, so the label is supplied rather than rendered blank. */
   nativeBalance?: { value: bigint; decimals: number };
+  /** The settlement token (USDG) leads the list: every premium and payout moves in it. */
+  settlement?: { value: bigint; decimals: number; symbol: string };
 }) {
   const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
 
@@ -54,6 +57,34 @@ export function WalletPanel({
       </div>
 
       <div className="mt-3 flex flex-col">
+        {/* The settlement token leads — every premium paid and every payout received moves
+            in USDG, so it is the money side of the wallet. Like ETH it is not a registered
+            stock and cannot itself be protected. */}
+        {settlement ? (
+          <div className="flex items-center justify-between gap-3 border-b border-line/40 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <TokenLogo symbol={settlement.symbol} className="h-8 w-8" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-ink">{settlement.symbol}</span>
+                <span className="block truncate text-[11px] text-mist">
+                  {settlement.symbol} · settlement token
+                </span>
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="text-right">
+                <div className={`tnum text-sm ${settlement.value > 0n ? "text-ink" : "text-mist"}`}>
+                  {fmtQty(settlement.value, settlement.decimals)}
+                </div>
+                <div className="text-[11px] text-mist">pays premiums</div>
+              </div>
+              <span className="rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-mist">
+                Money
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         {/* Native gas first, the way a wallet lists it. ETH is not a registered asset and
             cannot be: the registry takes ERC20 stock tokens, and both the position guard and
             settlement read balanceOf(), which a native balance does not have. So it shows the
@@ -87,8 +118,11 @@ export function WalletPanel({
         ) : (
           assets.map((a, i) => {
             const decimals = decimalsOf(a);
-            const balance = a.balance ?? 0n;
-            const fiat = a.price8 !== undefined ? (balance * a.price8) / 10n ** 8n : undefined;
+            // An undefined balance is a failed or in-flight read, not a real zero —
+            // rendering it as 0.00 told users their tokens were gone when the read
+            // simply did not come back. A dash says so honestly.
+            const balance = a.balance;
+            const fiat = a.price8 !== undefined && balance !== undefined ? (balance * a.price8) / 10n ** 8n : undefined;
             return (
               <div
                 key={a.token}
@@ -106,11 +140,11 @@ export function WalletPanel({
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <div className="text-right">
-                    <div className={`tnum text-sm ${balance > 0n ? "text-ink" : "text-mist"}`}>
+                    <div className={`tnum text-sm ${balance !== undefined && balance > 0n ? "text-ink" : "text-mist"}`}>
                       {fmtQty(balance, decimals)}
                     </div>
                     <div className="tnum text-[11px] text-mist">
-                      {fiat !== undefined && balance > 0n ? fmtUsd18(fiat) : "—"}
+                      {fiat !== undefined && balance !== undefined && balance > 0n ? fmtUsd18(fiat) : "—"}
                     </div>
                   </div>
                   {/* An asset the registry lists but has closed for new notes cannot be

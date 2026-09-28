@@ -21,5 +21,10 @@ export const robinhoodTestnet = defineChain({
   blockExplorers: {
     default: { name: "Robinhood Chain Explorer", url: "https://explorer.testnet.chain.robinhood.com" },
   },
+  // Multicall3 is deployed at the canonical address (verified via eth_getCode 2026-09-27).
+  // Without this, wagmi fires every readContracts batch as ~20 concurrent eth_calls into
+  // the rate-limited public RPC; the tail of that burst fails and allowFailure swallows
+  // it — which is how every balance but the first asset rendered as a fake 0.00.
+  multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" },
   testnet: true,
 });

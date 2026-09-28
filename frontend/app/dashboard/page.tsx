@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { StatStrip, Panel } from "@/components/dashboard/StatStrip";
 import { BalanceCard, type CoverageItem } from "@/components/dashboard/BalanceCard";
 import { NetworkPanel } from "@/components/dashboard/NetworkPanel";
+import { WalletPanel } from "@/components/dashboard/WalletPanel";
 import { ProtectFlow } from "@/components/ProtectFlow";
 import { Eyebrow, EmptyState, Pill, Skeleton, IconShield, IconFile, IconArrow } from "@/components/ui";
 import { useDeployed, useAssets, useNotes, useVaultStats, settlementTokenFor } from "@/lib/protocol";
@@ -124,6 +125,27 @@ export default function Dashboard() {
             )}
           </Panel>
         </div>
+
+        {/* Your wallet — every token in one list: settlement token first, gas, then each
+            registered stock. The reviewer pass removed the wallet TAB, not the need to see
+            balances; without this list a zero-balance asset is invisible and a failed read
+            is indistinguishable from an empty wallet. */}
+        <section className="mt-5">
+          <Panel title="Your wallet">
+            <WalletPanel
+              address={address}
+              isConnected={isConnected}
+              assets={assets}
+              decimalsOf={(a) => a.decimals}
+              nativeBalance={nativeBalance ? { value: nativeBalance.value, decimals: nativeBalance.decimals } : undefined}
+              settlement={
+                stBalance
+                  ? { value: stBalance.value, decimals: stBalance.decimals, symbol: stBalance.symbol ?? st?.symbol ?? "USDG" }
+                  : undefined
+              }
+            />
+          </Panel>
+        </section>
 
         {/* Active protection — kept below the grid: the reference has no equivalent, but
             losing sight of live notes from the dashboard would be a step backwards. */}
