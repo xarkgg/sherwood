@@ -17,6 +17,7 @@ import { useDeployed, useNotes, useAssets, useSettlementReceipts, settlementToke
 import { noteAbi } from "@/lib/abis";
 import { TokenLogo } from "@/components/TokenLogo";
 import { fmtPrice, fmtUsd18, fmtExpiry, fmtCountdown, fmtQty } from "@/lib/format";
+import { NETWORK } from "@/lib/network";
 import Link from "next/link";
 
 export default function Notes() {
@@ -167,7 +168,15 @@ function NoteCard({
               <span className="font-display font-bold">
                 {symbol} · {Number(note.level) / 1e16}%
               </span>
-              <span className="tnum ml-2 text-xs text-mist">#{note.id.toString()}</span>
+              <a
+                href={deployed ? `${NETWORK.explorer}/address/${deployed.note}` : undefined}
+                target="_blank"
+                rel="noreferrer"
+                className="tnum ml-2 text-xs text-action hover:underline"
+                title="View note on explorer"
+              >
+                #{note.id.toString()}
+              </a>
             </div>
             <div className="tnum mt-0.5 truncate text-xs text-mist">
               {fmtQty(note.amount, decimals)} · bought at {fmtPrice(note.entryPrice)} · cost {fmtUsd18(note.premiumUSD18)}
