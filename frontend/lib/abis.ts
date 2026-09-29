@@ -329,3 +329,13 @@ export const erc20Abi = [
     outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
+
+export const mockUSDGAbi = [
+  {
+    name: "faucet",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+] as const;
