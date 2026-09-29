@@ -224,8 +224,8 @@ These were verified against official docs (September 2026):
 - **Chainlink feed availability on testnet** — Chainlink's tokenized-equity feed list currently covers Robinhood Chain mainnet; if testnet lacks feeds, register demo feeds and disclose it.
 - **Stock Token API (`/rhj/assets`, `/rhj/prices/{SYM}`)** — investigated 2026-09-12 as a settlement source, **not integrated**: official and public (HTTP 200, no auth; 194 assets), but every deployment is mainnet chain 4663 (nothing for testnet), responses are unsigned, and `bid`/`ask` are raw underlying prices — explicitly *not* multiplier-adjusted, unlike the on-chain Chainlink feeds. Feeding it on-chain would require a trusted updater, breaking the invariant that settlement prices are publicly verifiable from chain data. It is a good display-only source (market context, halt status) and a future mainnet registry discovery path.
 - **Feed addresses** — per Chainlink's guidance, never hardcode: read them from the Chainlink Robinhood feeds page at deploy and pass via `FEED_<SYMBOL>` env.
-- **Sequencer uptime** — **resolved: no such feed exists on Robinhood Chain (checked 2026-09-14).** Robinhood's oracle docs *require* the check and publish no address to satisfy it, Chainlink lists uptime feeds for only 11 networks and says it is *"no longer expanding"* them, and Chainlink's own address-book data for this chain (57 feeds) contains no sequencer or uptime entry. `ProtectionOracle` implements the gate anyway — correct code, waiting on a feed that may never arrive — so it ships **disabled** on both networks and the staleness guard (default 72h, per-feed capped at 7 days) is the only price-freshness protection here. Supplying `SEQUENCER_UPTIME_FEED` at deploy is the one-line switch if Chainlink ever publishes one. BUILD_SPEC §7 carries the full evidence and the reasoning for why the gap costs Sherwood little: at 24/5 with no off-hours heartbeats, a closed-market price and an outage-frozen price are already indistinguishable inside a 72h bound.
-- **Mainnet equity feeds** — read live from `rpc.mainnet.chain.robinhood.com` (chainId 4663) on 2026-09-14, all `decimals() == 8`, all returning current rounds: TSLA `0x4A1166a659A55625345e9515b32adECea5547C38`, AMZN `0xD5a1508ceD74c084eBf3cBe853e2C968fB2a651C`, PLTR `0x820ABedFF239034956B7A9d2F0a331f9F075eB4c`, AMD `0x943A29E7ae51A4798823ca9eEd2ed533B2A22C72`. **NFLX has no feed on this chain** — the 35 equity feeds skip it — so the initial asset list needs one drop or one substitution before any mainnet deploy. Addresses are held in BUILD_SPEC §7 as deploy-time evidence, not pasted into config: they rotate with feed migrations and must be re-read, not copied.
+- **Sequencer uptime** — **resolved: no such feed exists on Robinhood Chain (checked 2026-09-14).** Robinhood's oracle docs *require* the check and publish no address to satisfy it, Chainlink lists uptime feeds for only 11 networks and says it is *"no longer expanding"* them, and Chainlink's own address-book data for this chain (57 feeds) contains no sequencer or uptime entry. `ProtectionOracle` implements the gate anyway — correct code, waiting on a feed that may never arrive — so it ships **disabled** on both networks and the staleness guard (default 72h, per-feed capped at 7 days) is the only price-freshness protection here. Supplying `SEQUENCER_UPTIME_FEED` at deploy is the one-line switch if Chainlink ever publishes one. Project documentation carries the full evidence and the reasoning for why the gap costs Sherwood little: at 24/5 with no off-hours heartbeats, a closed-market price and an outage-frozen price are already indistinguishable inside a 72h bound.
+- **Mainnet equity feeds** — read live from `rpc.mainnet.chain.robinhood.com` (chainId 4663) on 2026-09-14, all `decimals() == 8`, all returning current rounds: TSLA `0x4A1166a659A55625345e9515b32adECea5547C38`, AMZN `0xD5a1508ceD74c084eBf3cBe853e2C968fB2a651C`, PLTR `0x820ABedFF239034956B7A9d2F0a331f9F075eB4c`, AMD `0x943A29E7ae51A4798823ca9eEd2ed533B2A22C72`. **NFLX has no feed on this chain** — the 35 equity feeds skip it — so the initial asset list needs one drop or one substitution before any mainnet deploy. Addresses are documented as deploy-time evidence, not pasted into config: they rotate with feed migrations and must be re-read, not copied.
 
 ---
 
@@ -293,8 +293,6 @@ thing locally and is gitignored, so a deploy can never inherit a local-only addr
 ```
 sherwood/
 ├── README.md                        # This file
-├── BUILD_SPEC.md                    # Complete technical specification
-├── DESIGN.md                        # Frontend design system (midnight theme)
 ├── foundry.toml                     # Foundry configuration
 │
 ├── src/                             # Solidity contracts
@@ -451,7 +449,7 @@ Shipped beyond the phases above: the L2 sequencer-uptime gate in `ProtectionOrac
 
 ## Contact & Contribution
 
-See `BUILD_SPEC.md` for the complete technical specification and invariants list.
+See the project documentation for the complete technical specification and invariants list.
 
 ---
 
