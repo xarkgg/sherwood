@@ -7,7 +7,7 @@ import { decodeEventLog, formatUnits } from "viem";
 import { SegmentedControl, Eyebrow, TxStatus, IconAlert, type TxFail } from "@/components/ui";
 import { TokenLogo } from "@/components/TokenLogo";
 import { useDeployed, useAssets, settlementTokenFor, parseTokenAmount, usd18ToToken } from "@/lib/protocol";
-import { noteAbi, erc20Abi } from "@/lib/abis";
+import { noteAbi, erc20Abi, mockUSDGAbi } from "@/lib/abis";
 import { robinhoodTestnet } from "@/lib/chain";
 import { NETWORK } from "@/lib/network";
 import { fmtUsd18, fmtPrice, fmtExpiry, fmtQty, fmtToken } from "@/lib/format";
@@ -86,6 +86,14 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     query: { enabled: !!address && !!deployed && !!st?.address, refetchInterval: 15_000 },
   });
 
+  const { data: usdgBalance } = useReadContract({
+    address: st?.address,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && !!st?.address, refetchInterval: 15_000 },
+  });
+
   // Approve and create get separate write slots. Sharing one meant the approval receipt
   // was celebrated as "Protection created", and the create flow inherited the approval's
   // transaction state.
@@ -104,6 +112,14 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     error: createError,
   } = useWriteContract();
   const createReceipt = useWaitForTransactionReceipt({ hash: createHash });
+
+  const {
+    writeContract: writeFaucet,
+    data: faucetHash,
+    isPending: faucetPending,
+    error: faucetError,
+  } = useWriteContract();
+  const faucetReceipt = useWaitForTransactionReceipt({ hash: faucetHash });
 
   // Terms at the moment the create was submitted — the confirmation card shows what was
   // actually bought, not whatever the quote box has drifted to since.
@@ -146,10 +162,14 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
   const needsApproval = !!quote && allowance !== undefined && allowance < premiumToken;
   const allowanceUnknown = !!quote && allowance === undefined;
 
+  const isMockUSDG = chainId === 46630 && st?.address?.toLowerCase() === "0x8c4aa106a0a0d9ecaed5c87e1ae766aa8efbf006";
+  const usdgBalanceUnknown = usdgBalance === undefined && !!quote;
+  const hasEnoughUsdg = !usdgBalanceUnknown && usdgBalance !== undefined && usdgBalance >= premiumToken;
+
   const readyToAct = isConnected && !!deployed && chainId === robinhoodTestnet.id && !!selected;
-  const canApprove = readyToAct && !!quote && !!needsApproval && !approving && !buying;
+  const canApprove = readyToAct && !!quote && !!needsApproval && !approving && !buying && hasEnoughUsdg;
   const canCreate =
-    readyToAct && !!quote && holdsEnough && !needsApproval && !allowanceUnknown && !approving && !buying;
+    readyToAct && !!quote && holdsEnough && !needsApproval && !allowanceUnknown && !approving && !buying && hasEnoughUsdg;
 
   function approve() {
     if (!deployed || !st || !premiumToken) return;
@@ -211,11 +231,17 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
                 : "The chain didn't return a quote — adjust the amount or try again."
               : !quote
                 ? "Getting your quote from the chain…"
-                : allowanceUnknown
-                  ? "Checking your USDG allowance…"
-                  : needsApproval
-                    ? `The vault needs a ${st?.symbol ?? "USDG"} allowance before it can collect the premium.`
-                    : null;
+                : usdgBalanceUnknown
+                  ? "Checking your USDG balance…"
+                  : !hasEnoughUsdg
+                    ? isMockUSDG
+                      ? `You need ${fmtToken(premiumToken, st?.decimals ?? 6, st?.symbol)} to cover the premium — claim test USDG first.`
+                      : `Insufficient ${st?.symbol ?? "USDG"} balance to pay the premium.`
+                    : allowanceUnknown
+                      ? "Checking your USDG allowance…"
+                      : needsApproval
+                        ? `The vault needs a ${st?.symbol ?? "USDG"} allowance before it can collect the premium.`
+                        : null;
 
   const txState: TxFail | null = successOpen
     ? null
@@ -236,9 +262,30 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     </p>
   ) : null;
 
+  const faucetNeeded = isMockUSDG && !!quote && !!usdgBalance && usdgBalance < premiumToken;
+
   const actions = successOpen ? null : (
     <div className="space-y-3">
       {blockerLine}
+      {faucetNeeded && !needsApproval ? (
+        <div className="space-y-1">
+          <button
+            onClick={() => writeFaucet({ address: st!.address, abi: mockUSDGAbi, functionName: "faucet" })}
+            disabled={faucetPending}
+            className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm"
+          >
+            {faucetPending || faucetReceipt.isLoading ? "Claiming…" : `Get test ${st?.symbol ?? "USDG"}`}
+          </button>
+          {faucetError ? (
+            <p className="text-xs text-loss">
+              {faucetError.message.includes("FaucetCooldown") ? "Cooldown active — try again later" : faucetError.message.slice(0, 120)}
+            </p>
+          ) : null}
+          {faucetReceipt.isSuccess ? (
+            <p className="text-xs text-success">Faucet claimed — balances refreshing…</p>
+          ) : null}
+        </div>
+      ) : null}
       {needsApproval ? (
         <div className="space-y-1">
           <button onClick={approve} disabled={!canApprove} className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm">
