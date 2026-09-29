@@ -74,6 +74,22 @@ export type AssetView = {
   decimals: number;
 };
 
+const CANONICAL_ASSETS = new Set<string>([
+  "0xc9f9c86933092bbbfff3ccb4b105a4a94bf3bd4e",
+  "0x5884ad2f920c162cfbbacc88c9c51aa75ec09e02",
+  "0x1fbe1a0e43594b3455993b5de5fd0a7a266298d0",
+  "0x71178bac73cbeb415514eb542a8995b82669778d",
+  "0x3b8262a63d25f0477c4dde23f83cfe22cb768c93",
+]);
+
+/** Assets to exclude from UI even if registered historically (old demo tokens). */
+const EXCLUDED_DEMO_ASSETS = new Set<string>([
+  "0xd63fd09c46a96ff73b9ec7b941aff784c4c9f3ef",
+  "0xcb0f9186fd6f4c5f9dc3e30e649ef8203908a00b",
+  "0x9aaae34cb66a4aa5241c0eb9cb196cca02e58b63",
+  "0x29377502470c570aaef1c5a28cd1d42ce6669edf",
+]);
+
 /**
  * Every asset the registry lists, with its live Chainlink price, staleness bound and the
  * connected holder's balance. Reads are allowFailure by design: one misbehaving token
@@ -123,6 +139,10 @@ export function useAssets(): { assets: AssetView[]; isLoading: boolean } {
         active: boolean;
         registered: boolean;
       };
+      // Enforce canonical asset whitelist and exclude legacy demo tokens from any UI surface.
+      const tokenLower = token.toLowerCase() as Address;
+      if (!CANONICAL_ASSETS.has(tokenLower)) return;
+      if (EXCLUDED_DEMO_ASSETS.has(tokenLower)) return;
       rows.push({
         token,
         symbol: asset.symbol,
@@ -136,7 +156,8 @@ export function useAssets(): { assets: AssetView[]; isLoading: boolean } {
         decimals: decimalsRes?.status === "success" ? Number(decimalsRes.result) : 18,
       });
     });
-    return rows;
+    // Sort deterministically by symbol to keep UI stable.
+    return rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
   }, [tokens, meta.data, address]);
 
   // Prices read per-feed (Chainlink only, per spec) in a second batch.
