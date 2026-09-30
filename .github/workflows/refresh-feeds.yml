@@ -29,15 +29,28 @@ jobs:
       - name: Refresh feed prices
         env:
           REGISTRY: "0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7"
-          PRIVATE_KEY: ${{ secrets.FEED_WRITER_KEY }}
-        run: forge script script/RefreshFeeds.s.sol --rpc-url https://rpc.testnet.chain.robinhood.com/rpc --broadcast -vvvv
+          FEED_WRITER_KEY: ${{ secrets.FEED_WRITER_KEY }}
+        # The key must reach forge as --private-key, not merely as a PRIVATE_KEY env:
+        # with the env-only form every scheduled run simulated from forge's default
+        # sender and reverted NotOwner() on each DemoFeed.set().
+        run: |
+          if [ -z "$FEED_WRITER_KEY" ]; then echo "::error::FEED_WRITER_KEY secret is empty" >&2; exit 1; fi
+          forge script script/RefreshFeeds.s.sol \
+            --rpc-url https://rpc.testnet.chain.robinhood.com/rpc \
+            --broadcast \
+            --private-key "$FEED_WRITER_KEY"
 
-      - name: Verify TSLA feed is fresh
+      - name: Verify every active feed is fresh
+        # A partial refresh (one asset skipped or a non-owner key that only some feeds
+        # accept) would otherwise pass a TSLA-only check while another asset silently
+        # ages past its bound and breaks that asset's quote on the deployed demo.
         env:
-          FEED: "0x9b1be514E2dBAA52FB37B52f65E57885FD5c67D8"
+          FEEDS: "0x9b1be514E2dBAA52FB37B52f65E57885FD5c67D8 0x81ec7fa98007ed222352c1fa1a0dc9321fcd90b4 0x95ea4e74cd1da493306c1ce022dfe71c9f0f38b1 0x8259e052164fb94f93488a210799b53fc13fa842 0x8c3535b6f4bf1cfbe9ed31ff669e173d8b594819"
         run: |
           NOW=$(date +%s)
-          UPD=$(cast call "$FEED" "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url https://rpc.testnet.chain.robinhood.com/rpc | sed -n 4p | cut -d'[' -f1 | tr -d '[:space:]')
-          AGE=$((NOW - UPD))
-          echo "TSLA feed age: ${AGE}s"
-          test "$AGE" -lt 259200
+          for FEED in $FEEDS; do
+            UPD=$(cast call "$FEED" "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url https://rpc.testnet.chain.robinhood.com/rpc | sed -n 4p | cut -d'[' -f1 | tr -d '[:space:]')
+            AGE=$((NOW - UPD))
+            echo "$FEED age: ${AGE}s"
+            test "$AGE" -lt 259200 || { echo "::error::$FEED is stale (${AGE}s)"; exit 1; }
+          done
