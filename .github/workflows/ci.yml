@@ -1,0 +1,46 @@
+name: ci
+
+# The gate AGENTS.md has always required (forge build · forge test · frontend test ·
+# frontend build) but nothing enforced. It runs on every push and pull request so a
+# broken guard or a bad `!!0n`-style check can never reach the deployed app unnoticed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: contracts (forge build · forge test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge build
+      - run: forge test
+
+  frontend:
+    name: frontend (npm ci · npm test · npm run build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The test suites import the real .ts modules and rely on Node's native type
+          # stripping (>=22.6). Node 20 cannot import them and would fail the job.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # Built with no env overrides — the same path Vercel takes, so the baked-in
+      # defaults must carry the deploy on their own.
+      - run: npm run build

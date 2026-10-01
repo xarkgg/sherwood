@@ -1,0 +1,55 @@
+name: freshness-monitor
+
+# refresh-feeds.yml can fail in a way that looks fine: the 2026-09-28 run exited 0 while
+# refreshing nothing, and the 2026-09-29/30 runs failed the signature check. A reviewer
+# opening the app after a silent gap would see StalePrice() on every quote. This job is
+# the independent dead-man switch: it reads the live feeds from chain and fails loudly if
+# any asset's price is older than HALF its staleness bound (72h bound -> 36h alarm), so a
+# dead refresh cron can never hide again.
+#
+# Feed addresses are the registry's current per-asset feeds, documented in
+# deploy/deployments.json. They are stable for a given deployment.
+
+on:
+  schedule:
+    - cron: "0 */12 * * *" # twice daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Read every asset's feed age
+        env:
+          # Half the 72h registry bound — alarm before the protocol starts refusing quotes.
+          MAX_AGE_SECONDS: "129600"
+        run: |
+          set -euo pipefail
+          RPC="https://rpc.testnet.chain.robinhood.com/rpc"
+          NOW=$(date +%s)
+
+          FEEDS="TSLA:0x9b1bE514E2DbAa52FB37b52f65E57885fD5c67D8
+          AMZN:0x81eC7Fa98007Ed222352c1fA1a0DC9321FCd90b4
+          PLTR:0x95ea4e74CD1DA493306C1Ce022dfE71c9f0f38b1
+          AMD:0x8259e052164fb94f93488A210799b53fC13FA842
+          NFLX:0x8C3535B6F4bF1CfBe9Ed31fF669e173d8b594819"
+
+          FAILED=0
+          while IFS=: read -r SYM FEED; do
+            [ -z "$SYM" ] && continue
+            UPD=$(cast call "$FEED" "latestRoundData()(uint80,int256,uint256,uint256,uint80)" --rpc-url "$RPC" | sed -n 4p | cut -d'[' -f1 | tr -d '[:space:]')
+            AGE=$(( NOW - UPD ))
+            HRS=$(( AGE / 3600 ))
+            if [ "$AGE" -gt "$MAX_AGE_SECONDS" ]; then
+              echo "::error::$SYM feed is ${HRS}h old (> $((MAX_AGE_SECONDS/3600))h). Refresh it: run the refresh-demo-feeds workflow (check FEED_WRITER_KEY)."
+              FAILED=1
+            else
+              echo "$SYM feed age ${HRS}h — ok"
+            fi
+          done <<< "$FEEDS"
+          exit $FAILED
