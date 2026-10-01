@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { Header } from "@/components/Header";
 import { EmptyState, ProgressBar, Eyebrow, TxStatus, IconVault, IconCheck, type TxFail } from "@/components/ui";
 import { useDeployed, useVaultStats, settlementTokenFor, parseTokenAmount } from "@/lib/protocol";
-import { vaultAbi, erc20Abi } from "@/lib/abis";
+import { decodeFaucetError, formatFaucetCooldown, isFaucetSurface } from "@/lib/funding";
+import { vaultAbi, erc20Abi, mockUSDGAbi } from "@/lib/abis";
 
 export default function Vault() {
   const { address, isConnected } = useAccount();
@@ -18,7 +19,7 @@ export default function Vault() {
   const [amount, setAmount] = useState("");
   const amountWei = st ? parseTokenAmount(amount, st.decimals) : 0n;
 
-  const { data: stBalance } = useBalance({
+  const { data: stBalance, refetch: refetchBalance } = useBalance({
     address,
     token: st?.address,
     query: { enabled: !!address && !!st?.address, refetchInterval: 15_000 },
@@ -67,6 +68,36 @@ export default function Vault() {
 
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const withdrawWei = st ? parseTokenAmount(withdrawAmount, st.decimals) : 0n;
+
+  const isMockUSDG = isFaucetSurface(chainId, st?.address);
+  const {
+    writeContract: faucetWrite,
+    data: faucetHash,
+    isPending: isFauceting,
+    error: faucetError,
+  } = useWriteContract();
+  const faucetReceipt = useWaitForTransactionReceipt({ hash: faucetHash });
+
+  // Deployed MockUSDG exposes faucetCooldownRemaining(address) — verified live on 46630 —
+  // so the claim button can state the wait before the user spends a reverted tx finding it.
+  const { data: faucetCooldown } = useReadContract({
+    address: st?.address,
+    abi: mockUSDGAbi,
+    functionName: "faucetCooldownRemaining",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && isMockUSDG, refetchInterval: 60_000 },
+  });
+
+  function claimFaucet() {
+    if (!st || !isMockUSDG || isFauceting) return;
+    faucetWrite({ address: st.address, abi: mockUSDGAbi, functionName: "faucet" });
+  }
+
+  // A confirmed faucet/deposit/withdraw moves the settlement balance immediately — the 15s
+  // poll alone left users staring at a stale figure right after a successful claim.
+  useEffect(() => {
+    if (faucetReceipt.isSuccess || receipt.isSuccess || withdrawReceipt.isSuccess) refetchBalance();
+  }, [faucetReceipt.isSuccess, receipt.isSuccess, withdrawReceipt.isSuccess, refetchBalance]);
 
   function withdraw() {
     if (!deployed) return;
@@ -296,6 +327,86 @@ export default function Vault() {
                 </div>
               </div>
             ) : null}
+
+            {/* Testnet-only faucet. The mock is the 46630 settlement default; isMockUSDG is
+                keyed to chain 46630 *and* the mock address, so mainnet USDG can never render
+                this card or receive this call. */}
+            {isMockUSDG ? (
+              <div className="inset-card rise mt-6 p-5 sm:p-6" style={{ animationDelay: "300ms" }}>
+                <Eyebrow>Testnet USDG</Eyebrow>
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
+                  <div className="min-w-[15rem] flex-1">
+                    <h3 className="font-display text-xl font-semibold">Need test USDG?</h3>
+                    <p className="mt-1.5 max-w-[46ch] text-sm leading-relaxed text-mist">
+                      Robinhood Chain testnet drips ETH and stock tokens, but not the MockUSDG Sherwood
+                      settles in. The faucet pays <strong className="text-ink">1,000 TESTNET USDG</strong>{" "}
+                      per address every 24h, claimed from your own wallet.
+                    </p>
+                    <dl className="mt-4 space-y-1 text-xs">
+                      <div className="flex items-baseline justify-between gap-6">
+                        <dt className="text-mist">Your balance</dt>
+                        <dd className="tnum text-ink">{tok(stBalance?.value, st)}</dd>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-6">
+                        <dt className="text-mist">Next claim</dt>
+                        <dd className="tnum text-ink">
+                          {faucetCooldown === undefined
+                            ? "checking…"
+                            : faucetCooldown === 0n
+                              ? "ready now"
+                              : `in ${formatFaucetCooldown(faucetCooldown)}`}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="w-full sm:w-60">
+                    {!isConnected ? (
+                      <p className="text-xs leading-relaxed text-mist">
+                        Connect your wallet (top right) to claim test USDG — the faucet pays the connected
+                        address, never a backend signer.
+                      </p>
+                    ) : isFauceting || faucetReceipt.isLoading ? (
+                      <button disabled className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm">
+                        Claiming…
+                      </button>
+                    ) : faucetReceipt.isSuccess ? (
+                      <button disabled className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm text-action">
+                        Claimed — balance refreshing…
+                      </button>
+                    ) : (
+                      <button
+                        onClick={claimFaucet}
+                        disabled={faucetCooldown !== undefined && faucetCooldown > 0n}
+                        className="btn-action w-full rounded-2xl px-4 py-3 text-sm"
+                      >
+                        {faucetCooldown !== undefined && faucetCooldown > 0n
+                          ? `Cooldown — ${formatFaucetCooldown(faucetCooldown)}`
+                          : "Claim test USDG"}
+                      </button>
+                    )}
+                    {isConnected && faucetError ? (
+                      <p className="mt-2 text-xs leading-relaxed text-loss">
+                        {decodeFaucetError(
+                          `${faucetError.message} ${(faucetError as { shortMessage?: string }).shortMessage ?? ""}`
+                        )}
+                      </p>
+                    ) : null}
+                    {isConnected && !faucetError && faucetCooldown !== undefined && faucetCooldown > 0n && !isFauceting ? (
+                      <p className="mt-2 text-xs leading-relaxed text-mist">
+                        The faucet drips 1,000 USDG once per 24h per address — the timer above is on-chain.
+                      </p>
+                    ) : null}
+                    {faucetReceipt.isSuccess ? (
+                      <p className="mt-2 text-xs leading-relaxed text-action">
+                        Faucet confirmed — your USDG balance refreshed. Head to Protect to buy coverage.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
           </>
         )}
       </main>
