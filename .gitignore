@@ -8,10 +8,18 @@ node_modules/
 .next/
 *.tsbuildinfo
 
-# Agent harness state
+# Agent harness state — NEVER tracked. AGENTS.md is agent-only instructions and must not
+# live in the repo. Same rule applies to any agent-instruction/harness file.
 .agents/
 .claude/
+AGENTS.md
+CLAUDE.md
+QWEN.md
 skills-lock.json
+
+# Local build scratch
+frontend/build.log
+frontend/.build.sh
 
 # Env & secrets
 .env
