@@ -1,10 +1,33 @@
 # Sherwood 🛡️
 
+[![CI](https://github.com/xarkgg/sherwood/actions/workflows/ci.yml/badge.svg)](https://github.com/xarkgg/sherwood/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Live app](https://img.shields.io/badge/live-sherwoodnotes.vercel.app-00C80C?logo=vercel)](https://sherwoodnotes.vercel.app)
+[![Chain](https://img.shields.io/badge/chain-Robinhood%20Chain%20testnet%20(46630)-8A2BE2)](https://testnet.robinhoodchain.com)
+[![Built for Arbitrum Open House Singapore](https://img.shields.io/badge/built%20for-Arbitrum%20Open%20House%20Singapore-12AAFF)](https://www.hackquest.io/en/hackathons/Arbitrum-Open-House-Singapore-Online-Buildathon)
+
 > Programmable downside protection for Stock Tokens on Robinhood Chain.
+
+**[Live app](https://sherwoodnotes.vercel.app)** · [Setup](#quick-start) · [Try it (no wallet)](#try-it) · [Proof](#proof) · [How we tried to break it](#ways-we-tried-to-break-it) · [Docs](#how-it-works)
 
 Sherwood lets users protect their stock positions against downside risk while keeping all their upside. Buy a Protection Note, define your floor, and settle with verified prices. The web app is **SherwoodNotes**.
 
 *Built for the Arbitrum Open House Singapore: Online Buildathon — deployed on Robinhood Chain testnet (chain ID 46630).*
+
+---
+
+## Try it
+
+No wallet needed for any of these — every page reads live on-chain state:
+
+1. Open **[the live app](https://sherwoodnotes.vercel.app)** — the dashboard lists the five real Robinhood Chain testnet stocks (TSLA, AMZN, PLTR, AMD, NFLX) with live feed prices.
+2. Open **[Protect](https://sherwoodnotes.vercel.app/protect)** — pick a stock, type an amount, and see the on-chain premium quote computed by the ProtectionNote contract itself (the UI never estimates prices locally).
+3. Open **[Vault](https://sherwoodnotes.vercel.app/vault)** — the backer pool's deposits, reserved collateral, and remaining capacity are live contract reads.
+4. Open **[Notes](https://sherwoodnotes.vercel.app/notes)** — settled demo notes and their payout receipts, straight from event logs.
+
+With a wallet: connect on chain 46630, open Vault, claim 1,000 test USDG from the faucet, approve, and buy protection on stock you hold. [Setup](#quick-start) below if you want to run it locally.
+
+> **Demo video — pending.** The recording is made after the UI is final; until then the live app is the demo.
 
 ---
 
@@ -193,11 +216,24 @@ Settlement is permissionless: anyone can settle a note once it passes expiry, an
 
 ## Tech Stack
 
+Production architecture and what the testnet demo actually runs are different, and the
+difference is one of addresses, not code paths:
+
+| Layer | Production intent | Robinhood Chain testnet (46630) demo |
+|---|---|---|
+| Settlement currency | USDG (Paxos Global Dollar) `0x5fc5...d168` (4663) | `MockUSDG` `0x8c4a...f006`, 6 dec, public `faucet()` 1,000/address/24h |
+| Price oracle | Chainlink `AggregatorV3` tokenized-equity feeds | `DemoFeed` stand-ins, owner-set — **Chainlink publishes no equity feeds on 46630**; prices there are test fixtures, NOT market data |
+| Stock tokens | Robinhood tokenized stocks | the same real Robinhood testnet tokens (TSLA/AMZN/PLTR/AMD/NFLX, 18 dec) |
+
 - **Chain:** Robinhood Chain — mainnet (4663) and testnet (46630), an Arbitrum-based L2 with ETH gas
 - **Smart Contracts:** Solidity (Foundry for compile/test/deploy)
-- **Settlement Currency:** USDG (Paxos Global Dollar)
-- **Price Oracle:** Chainlink Price Feeds (`AggregatorV3`)
 - **Frontend:** SherwoodNotes — Next.js + React + TypeScript, wagmi / viem, Tailwind CSS
+
+The contracts read any `AggregatorV3` feed and any 6-decimal ERC-20 unchanged, so the
+swap to production is registering real feeds and pointing `SETTLEMENT_TOKEN` at canonical
+USDG — `script/Config.s.sol` selects by chain ID and **refuses MockUSDG on mainnet
+outright**. No contract has a testnet branch. DemoFeed prices must never be presented as
+live market data, and the frontend labels its feed type wherever a price is quoted.
 
 ---
 
@@ -229,6 +265,50 @@ These were verified against official docs (September 2026):
 
 ---
 
+## Proof
+
+Every claim below is a link — a transaction, a contract, or a test you can run with one command. Nothing here is an assertion.
+
+| Claim | Evidence |
+| --- | --- |
+| All five real Robinhood Chain testnet stocks are registered and **active** — including NFLX | [AssetRegistry `0xb7Dbaa2b…49A7`](https://explorer.testnet.chain.robinhood.com/address/0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7) — `isSupported()` returns true for TSLA, AMZN, PLTR, AMD, NFLX · NFLX reactivation tx [`0x792a1a77…ee6b6`](https://explorer.testnet.chain.robinhood.com/tx/0x792a1a77d084a6103cfd73ca12c5a6f0134832be73ba1bb6a3a81d404faee6b6) (owner `setAssetActive`, no redeploy) |
+| The vault is funded and every active note is fully backed | Live contract reads via the [Vault page](https://sherwoodnotes.vercel.app/vault): deposits **16,017.23 USDG** · reserved **1,223.50** · available capacity **11,590.28** · invariant pinned by [`test_E2E_TwoBuyers_ReservedTracksLiability_VaultSolventAndSurplusWithdrawable`](test/E2E.t.sol) |
+| Premium pull refuses an underfunded wallet — the vault cannot collect what isn't there | **Real failed tx** [`0x9ef87fb6…603cd`](https://explorer.testnet.chain.robinhood.com/tx/0x9ef87fb6027ad3a416bfe55728c89f553993dd9565c5910c64a42053081603cd) — status **0 (failed)**, reverted `ERC20InsufficientBalance` while creating a 0.01 TSLA note with zero USDG |
+| You cannot protect stock you don't hold | **Real failed tx** [`0x38adec28…343e3`](https://explorer.testnet.chain.robinhood.com/tx/0x38adec28db596a5baae5efdb5e3b7f3f5cd04bfc4df4e8dff07712fa9ce343e3) — status **0 (failed)**, reverted `InsufficientPosition(TSLA, held=10e18, required=11e18)` |
+| The faucet pays exactly 1,000 USDG, once per 24h per address | Claim tx [`0x6e8c867d…122e6`](https://explorer.testnet.chain.robinhood.com/tx/0x6e8c867dfb0f9b2b057bac9cbe6fc82979dac7ec701f1b7cdb0af1bc8a4122e6) minted exactly `1_000_000_000` (6 dec) · the immediate retry reverted `FaucetCooldown(claim + 86400)` · economics pinned by `test/MockUSDG.t.sol` |
+| Stale prices are rejected, never quoted | [`test_GetPrice_RevertsWhenTooStale`](test/ProtectionOracle.t.sol) — the oracle reverts `StalePrice` past the per-asset bound (72h); the same guard is why the demo carries a cron + freshness monitor |
+| Capacity is checked before a single premium is taken | [`test_ReserveFor_RevertsWhenCapacityExceeded_NothingCollected`](test/SherwoodVault.t.sol) |
+| Contracts are source-verified | All four v7 contracts (registry, oracle, vault, note) verified on the [testnet explorer](https://explorer.testnet.chain.robinhood.com) — addresses in [`deploy/deployments.json`](deploy/deployments.json) |
+| The suite passes with one command | `forge test` → **195 passed, 0 failed** · `cd frontend && npm test` → **33 passed, 0 failed** · both run on every push by [CI](https://github.com/xarkgg/sherwood/actions/workflows/ci.yml) |
+
+## Ways we tried to break it
+
+Adversarial evidence beats feature lists. Each row is a refusal that actually happened — on chain or in the suite — and where to see it.
+
+| Attack | Outcome | Proof |
+| --- | --- | --- |
+| Buy protection with zero USDG in the wallet | Reverted — no note created, nothing collected | Failed tx `0x9ef87fb6…` above (status 0) |
+| Protect more stock than the wallet holds | Reverted `InsufficientPosition` | Failed tx `0x38adec28…` above (status 0) |
+| Back a stack of notes with one position | Reverted — aggregate exposure capped at holdings | [`test_Create_AggregateCap_RevertsOnStackingBeyondPosition`](test/ProtectionNote.t.sol) |
+| Concentrate one stock past 30% of the vault | Reverted — per-stock cap, immutable at deploy | [`test_Create_ConcentrationCap_BlocksStackingOneStockPastItsSlice`](test/ProtectionNote.t.sol) |
+| Overcommit the vault past its buffer | Reverted `InsufficientCapacity` — capacity checked before the premium transfer | [`test_ReserveFor_RevertsWhenCapacityExceeded_NothingCollected`](test/SherwoodVault.t.sol) |
+| Quote or settle against a stale price | Reverted `StalePrice` | [`test_GetPrice_RevertsWhenTooStale`](test/ProtectionOracle.t.sol) |
+| Double-claim the faucet inside 24h | Reverted `FaucetCooldown` | Live retry, 2026-09-13 — recorded in `deploy/deployments.json` |
+| Write a demo-feed price with the wrong signer | Reverted `NotOwner` — feed ownership is immutable | The real [GitHub Actions failures of 2026-09-29/30](https://github.com/xarkgg/sherwood/actions/workflows/refresh-feeds.yml) (caught, secret fixed, monitor added) |
+| Point mainnet at the mock token | Reverts `MockTokenOnMainnet` at deploy time | [`test_MockOnMainnetReverts`](test/DeployConfig.t.sol) |
+| Modify a note's terms after creation | Impossible — no setter exists; terms are immutable | `ProtectionNote` has no mutating path on an issued note; settle is the only terminal transition |
+
+## Honest limitations
+
+- **Contracts are unaudited.** 195 tests pin the math and the guards; no third party has reviewed them.
+- **Testnet prices are owner-set fixtures, not market data.** Robinhood Chain testnet publishes no stock feeds, so the registry points at `DemoFeed` stand-ins behind the same `AggregatorV3` interface. Mainnet is an address swap, not a code path — but until then, every price on the demo is a test fixture and is labelled as one.
+- **The settlement token on testnet is `MockUSDG`.** The official testnet USDG drip never funded a protocol wallet (observed live, escalated to Robinhood support), so the stack settles on a source-verified mock with a public faucet. Mainnet uses canonical USDG; `Config.s.sol` refuses the mock outright (`MockTokenOnMainnet`).
+- **The L2 sequencer-uptime gate ships disabled.** No uptime feed exists on this chain (checked against Chainlink's address book and Robinhood's docs). The 72h staleness bound is the only price-freshness protection — full evidence in Verified Environment Facts.
+- **NFLX has no mainnet Chainlink feed yet.** The 35 mainnet equity feeds skip it; the initial mainnet asset list needs one drop or one substitution.
+- **A demo video is pending.** The live app is the demo until the recording is made.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -255,15 +335,20 @@ forge script script/DemoCreate.s.sol --rpc-url $RPC_URL --broadcast # after expi
 # Frontend (SherwoodNotes)
 cd frontend
 npm install
+npm test          # node:test suites — canonical asset set, USDG funding policy, deployments metadata
 npm run dev
 ```
 
 Then open http://localhost:3000:
-1. Connect wallet on Robinhood Chain testnet (testnet settlement tokens required — claim them with `script/Faucet.s.sol` or the site faucet at testnet.robinhoodchain.com)
-2. View your stock tokens
-3. Select asset and create a Protection Note
-4. Monitor on-chain settlement
-5. View payout receipt (if triggered)
+1. Connect wallet on Robinhood Chain testnet (chain ID 46630)
+2. Open **Vault** and claim test USDG — Robinhood's testnet faucet pays ETH and stock
+   tokens but not MockUSDG, so the app carries its own "Need test USDG?" card that calls
+   `faucet()` **from your wallet** (never a backend signer). 1,000 USDG per address per 24h
+3. View your stock tokens (portfolio shows the five real testnet stocks only)
+4. Select asset and create a Protection Note — the app blocks create until your USDG
+   balance covers the premium and the vault allowance is approved
+5. Monitor on-chain settlement
+6. View payout receipt (if triggered)
 
 ### Frontend on Vercel
 
@@ -278,9 +363,16 @@ build needs no secrets and no network beyond `npm ci` from the committed lockfil
 2. Deploy — no env vars required
 3. Optional env vars: `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` — with it set, the Connect wallet button opens the Reown AppKit chooser: installed browser extensions (MetaMask, OKX, …, detected via EIP-6963) connect directly on desktop, phone wallets deep-link exactly as before, and everything else gets a QR; get one free at cloud.walletconnect.com. With it unset the chooser is unavailable and connect relies on the browser's injected wallet. In the WalletConnect dashboard allowlist `http://localhost:3000` for local dev and your deployed domain, or leave allowed domains empty to permit all. `NEXT_PUBLIC_RPC_ROBINHOOD_TESTNET` (a rate-limit-free RPC instead of the public one)
 4. To buy protection on the deployed app you need the testnet settlement token: MockUSDG
-   (`0x8c4aa106a0A0d9ECAeD5C87e1AE766aa8Efbf006`), 1,000 per address per 24h — claim it with
-   `forge script script/Faucet.s.sol --rpc-url $RPC_URL --broadcast`, or from the site faucet
-   at testnet.robinhoodchain.com for the official testnet USDG
+   (`0x8c4aa106a0A0d9ECAeD5C87e1AE766aa8Efbf006`), 1,000 per address per 24h. The simplest
+   path is the **Vault page's "Need test USDG?" card**, which calls `faucet()` from the
+   connected wallet and refreshes the balance on confirmation. For scripts and CI,
+   `forge script script/Faucet.s.sol --rpc-url $RPC_URL --broadcast` does the same thing
+   from a shell. The official testnet USDG at `0x7E95...802F` is claimable from the
+   Robinhood site faucet (`testnet.robinhoodchain.com`), but its drip never reached
+   protocol wallets — see Verified Environment Facts — which is why MockUSDG is the
+   testnet default. `NEXT_PUBLIC_USDG_ROBINHOOD_TESTNET` repoints the frontend at the
+   official token the day its faucet is reliable; the mock's faucet UI never renders
+   against it (it is gated on chain 46630 *and* the MockUSDG address).
 
 All contract addresses fall back to the deployed testnet values and can be overridden per
 environment with `NEXT_PUBLIC_*` without touching code. `frontend/.env.local` does the same
@@ -420,7 +512,7 @@ Shipped beyond the phases above: the L2 sequencer-uptime gate in `ProtectionOrac
 
 **No Overbuild** — Sherwood's core demo is: Real Stock Token → User Creates Protection Note → Verified Price → On-Chain Terms → Real Settlement. That alone is a complete financial primitive.
 
-**Prices from Chainlink Only** — Never accept user-supplied, estimated, or cached prices. Always verify freshness. Always reject stale, invalid, or unsupported assets. On an L2, freshness is not enough: while the sequencer is down a round can look current and carry a pre-outage price, so no price is used unless the chain's uptime feed reports the sequencer up and clear of its restart grace window (and the gate fails closed when the uptime data is malformed).
+**Prices from Chainlink Only** — Never accept user-supplied, estimated, or cached prices. Always verify freshness. Always reject stale, invalid, or unsupported assets. Prices always come from an on-chain `AggregatorV3` read — on mainnet that is the real Chainlink tokenized-equity feed; on Robinhood testnet (46630), where Chainlink publishes no equity feeds, the same read hits an owner-set `DemoFeed` stand-in, which is test fixture data and labelled as such (the swap to production is a registry address change, not a code path). On an L2, freshness is not enough: while the sequencer is down a round can look current and carry a pre-outage price, so no price is used unless the chain's uptime feed reports the sequencer up and clear of its restart grace window (and the gate fails closed when the uptime data is malformed).
 
 **No TODOs** — Write complete implementations. If something is blocked, log it as a known limitation in the commit message, not as a TODO marker.
 
