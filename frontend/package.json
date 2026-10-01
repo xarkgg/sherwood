@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test tests/assets.test.mjs tests/funding.test.mjs tests/deployments.test.mjs"
   },
   "engines": {
     "node": ">=18.18"

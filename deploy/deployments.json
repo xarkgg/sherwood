@@ -12,18 +12,19 @@
     "note": "0x6BD1a3F9aA4C61711CA41830C06B37216aFdf3A9"
   },
   "deployTxHashes": {
+    "_readme": "Transactions from the v7 deploy (2026-09-18). Verified 2026-09-29 by re-reading each tx input from the chain: the registerAsset* entries here register the token named in the key. TSLA's landed on the real Robinhood token; AMZN/PLTR/AMD/NFLX landed on the historical MockERC20 demo tokens, which were deactivated in the 2026-09-28 migration below. These are NOT the active registrations for AMZN/PLTR/AMD/NFLX — see registryMigration.",
     "AssetRegistry": "0x6a38c5c21b42c90c6368f5e8bf332ea28fa8b1743c24b0287690a642f0022856",
     "ProtectionOracle": "0x9c3810ab145a8f5af423757e70c4f13c0a2acba573f856ab0bbff0c09f699612",
     "SherwoodVault": "0x558b31434f7cf2b5ba93e459f2ac444dfb623089f2c9c2cfcf4e72934ba2e9d6",
     "ProtectionNote": "0x9d3af8c6b91e9290e88b9394afc5a25f53ee68c529b7159ddd8bcd78e536bc94",
     "setNoteContract": "0xc351673b0255ff83c73f9240770e3a74cb8e16bf8001f6a96254f31f2aa8d53e",
-    "registerAssetTSLA": "0xa260d705f28ef2bf8158867a77c38446e9ffd34b0fdf45e89225b3ea2818f058",
-    "registerAssetAMZN": "0x05a1ac1e9182c30944ff54b7939074fd9a31ced6626671659ba4fb30c9b0b84e",
-    "registerAssetNFLX": "0x144585ee7139dd7e87e524ef7fc21ba0277bc0f0b82e362f97ba62a8bed60462",
-    "registerAssetPLTR": "0x6240bd3a2452477b21d2be6ddf1f9f162c405914857af79e55da8b5e6e8c73d6",
-    "registerAssetAMD": "0x07cdfa2c76fed843b0e5b513df75c20dd359f04d2192718b39a02c7cfa79c0b2"
+    "registerAssetTSLA_canonical": "0xa260d705f28ef2bf8158867a77c38446e9ffd34b0fdf45e89225b3ea2818f058",
+    "registerAssetAMZN_demo_deactivated": "0x05a1ac1e9182c30944ff54b7939074fd9a31ced6626671659ba4fb30c9b0b84e",
+    "registerAssetPLTR_demo_deactivated": "0x6240bd3a2452477b21d2be6ddf1f9f162c405914857af79e55da8b5e6e8c73d6",
+    "registerAssetAMD_demo_deactivated": "0x07cdfa2c76fed843b0e5b513df75c20dd359f04d2192718b39a02c7cfa79c0b2",
+    "registerAssetNFLX_demo_deactivated": "0x144585ee7139dd7e87e524ef7fc21ba0277bc0f0b82e362f97ba62a8bed60462"
   },
-  "wiringReadBack": "v7 read from chain 2026-09-18, independent of the deploy script's own asserts: vault.bufferBps() = 2000, vault.protocolFeeBps() = 1000 (Sherwood keeps 10% of each premium), vault.treasury() = deployer 0xad07...49A0, vault.pendingProtocolFees() = 0, vault.totalShares() = 0 (fresh share ledger), vault.totalDeposits() = 0 and reserved() = 0 (fresh vault, unfunded), vault.noteContract() = the v7 note; note.maxAssetExposureBps() = 3000 (per-stock liability cap = 30% of deposits), note.SETTLEMENT_WINDOW() = 2592000 (30 days), registry.allAssets() = the five demo assets (TSLA/AMZN/PLTR/AMD active, NFLX registered-but-closed), oracle.sequencerUptimeFeed() = address(0) with grace 3600 (OFF by design — no feed on 46630). Dry run passed clean, broadcast under termux-wake-lock, exit 0.",
+  "wiringReadBack": "v7 read from chain 2026-09-18, independent of the deploy script's own asserts: vault.bufferBps() = 2000, vault.protocolFeeBps() = 1000 (Sherwood keeps 10% of each premium), vault.treasury() = deployer 0xad07...49A0, vault.pendingProtocolFees() = 0, vault.totalShares() = 0 (fresh share ledger), vault.totalDeposits() = 0 and reserved() = 0 (fresh vault, unfunded), vault.noteContract() = the v7 note; note.maxAssetExposureBps() = 3000 (per-stock liability cap = 30% of deposits), note.SETTLEMENT_WINDOW() = 2592000 (30 days), registry.allAssets() = 9 entries, re-read from chain 2026-09-29: the five CANONICAL user-facing stocks, all active — TSLA 0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E (feed 0x9b1bE514…), AMZN 0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02 (feed 0x81eC7Fa9…), PLTR 0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0 (feed 0x95ea4e74…), AMD 0x71178BAc73cBeb415514eB542a8995b82669778d (feed 0x8259e052…), NFLX 0x3b8262A63d25f0477c4DDE23F83cfe22Cb768C93 (feed 0x8C3535B6…, reactivated 2026-09-29 via setAssetActive tx 0x792a1a77d084a6103cfd73ca12c5a6f0134832be73ba1bb6a3a81d404faee6b6) — plus four HISTORICAL demo tokens kept registered with active=false for settlement evidence (0xD63Fd09c…, 0xCb0f9186…, 0x9AAaE34C…, 0x29377502…); the frontend filters to the canonical five by address. oracle.sequencerUptimeFeed() = address(0) with grace 3600 (OFF by design — no feed on 46630). Dry run passed clean, broadcast under termux-wake-lock, exit 0.",
   "settlementToken": {
     "symbol": "MockUSDG",
     "name": "Mock USDG",
@@ -39,40 +40,50 @@
     "TSLA": {
       "token": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
       "feed": "0x9b1bE514E2DbAa52FB37b52f65E57885fD5c67D8",
-      "feedType": "DemoFeed — owner-set testnet stand-in; Chainlink publishes no feeds on 46630 (mainnet only). NOT market data. Swap to the real Chainlink feed unchanged when available."
+      "feedType": "DemoFeed — owner-set testnet stand-in; Chainlink publishes no feeds on 46630 (mainnet only). NOT market data. Swap to the real Chainlink feed unchanged when available.",
+      "active": true,
+      "registrationTx": "0xa260d705f28ef2bf8158867a77c38446e9ffd34b0fdf45e89225b3ea2818f058",
+      "registrationNote": "Current registration on the deployed registry 0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7, event-verified 2026-09-29. Any other tx hash in this entry is historical evidence, not the active registration."
     },
     "AMZN": {
       "token": "0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02",
       "feed": "0x81eC7Fa98007Ed222352c1fA1a0DC9321FCd90b4",
       "feedType": "DemoFeed — owner-set testnet stand-in; Chainlink publishes no feeds on 46630. Real Robinhood token, active as of 2026-09-28 registry migration.",
-      "historicalDemoRegistrationTx": "0xe02b37e8b8ec1f4575ae0fe2f72b3d5b7fc2339cc8dfd4e7e4d165af537eba82 — historical demo registration, superseded by 2026-09-28 migration",
+      "historicalDemoRegistrationTx": "0xe02b37e8b8ec1f4575ae0fe2f72b3d5b7fc2339cc8dfd4e7e4d165af537eba82 — HISTORICAL ONLY: tx sent to the superseded v6 registry 0xC3aCC52C3dAF1c2D1B65725781063dCfc6a1c6Fd, registering the legacy demo token; never the active registration",
       "active": true,
-      "migrated": "2026-09-28: demo token deactivated, real token 0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02 registered and active"
+      "migrated": "2026-09-28: demo token deactivated, real token 0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02 registered and active",
+      "registrationTx": "0x3a526e07e0cd12e8d30243daf4aa71b0b4678e32206bdb05e3e367a13a5b9e84",
+      "registrationNote": "Current registration on the deployed registry 0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7, event-verified 2026-09-29. Any other tx hash in this entry is historical evidence, not the active registration."
     },
     "PLTR": {
       "token": "0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0",
       "feed": "0x95ea4e74CD1DA493306C1Ce022dfE71c9f0f38b1",
       "feedType": "DemoFeed — owner-set testnet stand-in. Real Robinhood token, active as of 2026-09-28 registry migration.",
-      "historicalDemoRegistrationTx": "0xda91b0adc74992157f41d795100b4dedfd2e6c281f42030eaf0fde8654b9bacc — historical demo registration, superseded by 2026-09-28 migration",
+      "historicalDemoRegistrationTx": "0xda91b0adc74992157f41d795100b4dedfd2e6c281f42030eaf0fde8654b9bacc — HISTORICAL ONLY: tx sent to the superseded v6 registry 0xC3aCC52C3dAF1c2D1B65725781063dCfc6a1c6Fd, registering the legacy demo token; never the active registration",
       "active": true,
-      "migrated": "2026-09-28: demo token deactivated, real token 0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0 registered and active"
+      "migrated": "2026-09-28: demo token deactivated, real token 0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0 registered and active",
+      "registrationTx": "0x191894966f66433c6d91e046b2b477e049cb596d53b9616b953beeb14db5c5fc",
+      "registrationNote": "Current registration on the deployed registry 0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7, event-verified 2026-09-29. Any other tx hash in this entry is historical evidence, not the active registration."
     },
     "AMD": {
       "token": "0x71178BAc73cBeb415514eB542a8995b82669778d",
       "feed": "0x8259e052164fb94f93488A210799b53fC13FA842",
       "feedType": "DemoFeed — owner-set testnet stand-in. Real Robinhood token, active as of 2026-09-28 registry migration.",
-      "historicalDemoRegistrationTx": "0xe97162a8fc75a62fab6879c25727cee535cc0826a0d874dbdcef0c9fc3d94c86 — historical demo registration, superseded by 2026-09-28 migration",
+      "historicalDemoRegistrationTx": "0xe97162a8fc75a62fab6879c25727cee535cc0826a0d874dbdcef0c9fc3d94c86 — HISTORICAL ONLY: tx sent to the superseded v6 registry 0xC3aCC52C3dAF1c2D1B65725781063dCfc6a1c6Fd, registering the legacy demo token; never the active registration",
       "active": true,
-      "migrated": "2026-09-28: demo token deactivated, real token 0x71178BAc73cBeb415514eB542a8995b82669778d registered and active"
+      "migrated": "2026-09-28: demo token deactivated, real token 0x71178BAc73cBeb415514eB542a8995b82669778d registered and active",
+      "registrationTx": "0x1ac3310852da7cc5bd08450bf8448c14aab4bf1f49ccb2885f2813a699fdc21f",
+      "registrationNote": "Current registration on the deployed registry 0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7, event-verified 2026-09-29. Any other tx hash in this entry is historical evidence, not the active registration."
     },
     "NFLX": {
       "token": "0x3b8262A63d25f0477c4DDE23F83cfe22Cb768C93",
       "feed": "0x8C3535B6F4bF1CfBe9Ed31fF669e173d8b594819",
-      "feedType": "DemoFeed at $900 (8 dec). Real Robinhood token registered but intentionally inactive as of 2026-09-28.",
-      "historicalDemoRegistrationTx": "0xc0cbc8e7dc323dd26f06ca17f3458702d98d39fbf7ecee03b684c5caef015a4a — historical demo registration; real token registered 2026-09-28",
-      "deactivated": "2026-09-28: real NFLX token 0x3b8262A63d25f0477c4DDE23F83cfe22Cb768C93 registered with active=false per product requirement",
-      "active": false,
-      "why": "NFLX must remain intentionally inactive on testnet per product thesis. Demo token deactivated and replaced with real token address but kept inactive."
+      "feedType": "DemoFeed at $900 (8 dec). Real Robinhood token registered and active as of 2026-09-28 registry migration.",
+      "historicalDemoRegistrationTx": "0xc0cbc8e7dc323dd26f06ca17f3458702d98d39fbf7ecee03b684c5caef015a4a — HISTORICAL ONLY: tx sent to the superseded v6 registry 0xC3aCC52C3dAF1c2D1B65725781063dCfc6a1c6Fd, registering the legacy demo token; never the active registration",
+      "active": true,
+      "migrated": "2026-09-28: demo token deactivated, real token 0x3b8262A63d25f0477c4DDE23F83cfe22Cb768C93 registered and active; re-activated on-chain 2026-09-29 via setAssetActive",
+      "registrationTx": "0x5e36d33638021dece2cb748e809f67154f528ec4cbc8aa26e0138550852926c3",
+      "registrationNote": "Current registration on the deployed registry 0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7, event-verified 2026-09-29. Any other tx hash in this entry is historical evidence, not the active registration."
     }
   },
   "demoFeeds": {
@@ -81,7 +92,7 @@
     "NFLX": "0x0bA3E299EE7548A3F56f1cbaA4A88B48b798dC7b",
     "PLTR": "0xFcB760a8A2B1580048962805D20BDc053bE2b925",
     "AMD": "0x01575CF43Ad4AdB6E49a3f45876475F3FB59f346",
-    "note": "Deployed via script/DemoFeed.s.sol, initial prices default $100 (TSLA $250). Only TSLA is registered in the asset registry. Feeds persist across v2/v3/v4 redeploys."
+    "note": "HISTORICAL v6-era DemoFeed deployments (script/DemoFeed.s.sol), kept as migration evidence. These feed addresses are NOT what the deployed registry currently uses for AMZN/PLTR/AMD/NFLX — the live per-symbol feeds are in the assets block above and were re-read from the registry on 2026-09-29. All five symbols are now registered and active; see registryMigration."
   },
   "demoNotes": [
     {
@@ -336,5 +347,68 @@
     "Frontend is repointed at this stack: v4 addresses and MockUSDG are the built-in defaults in frontend/lib/addresses.ts (mirrored in the gitignored frontend/.env.local), and `npm run build` was verified with no env file present, so a Vercel deploy needs no configuration.",
     "Demo write path executed 2026-09-13 on v4: script/DemoCreate.s.sol funded the vault with 50 MockUSDG and bought note 1 (0.1 TSLA, $250 entry, 80%, 1 day) entirely in MockUSDG, paid from the 1,000 claimed from its faucet. Both notes settled 2026-09-14 — see each demoNote's settlement object.",
     "Deploy note for this chain: forge script needs --private-key passed explicitly for --broadcast; relying on the PRIVATE_KEY env var alone left the broadcast using Foundry's default sender and nothing was signed (the first v4 attempt produced zero deployed code). Dry runs need --sender set to the deployer too, or the DemoFeed's onlyOwner check reverts NotOwner. Expect an EIP-3855/PUSH0 warning for chain 46630 — v1 through v5 all deployed and execute fine. On this device run long broadcasts under termux-wake-lock; an unattended v4-era broadcast slept mid-run and submitted nothing."
-  ]
+  ],
+  "registryMigration": {
+    "_readme": "Authoritative for which tokens are ACTIVE on the deployed registry (0xb7Dbaa2bC029eb1DE0C7D1929aE9402f857b49A7). Event-log verified on chain 2026-09-29. The frontend user-facing set is the five canonical tokens below; the four demo tokens stay registered with active=false so their historical notes keep settling.",
+    "migratedAt": "2026-09-28",
+    "readBackAt": "2026-09-29",
+    "canonicalRegistrations": {
+      "TSLA": {
+        "token": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+        "registeredAt": "block 121401352 (v7 deploy)",
+        "tx": "0xa260d705f28ef2bf8158867a77c38446e9ffd34b0fdf45e89225b3ea2818f058",
+        "active": true
+      },
+      "AMZN": {
+        "token": "0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02",
+        "registeredAt": "block 125885933",
+        "tx": "0x3a526e07e0cd12e8d30243daf4aa71b0b4678e32206bdb05e3e367a13a5b9e84",
+        "active": true
+      },
+      "PLTR": {
+        "token": "0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0",
+        "registeredAt": "block 125885983",
+        "tx": "0x191894966f66433c6d91e046b2b477e049cb596d53b9616b953beeb14db5c5fc",
+        "active": true
+      },
+      "AMD": {
+        "token": "0x71178BAc73cBeb415514eB542a8995b82669778d",
+        "registeredAt": "block 125886065",
+        "tx": "0x1ac3310852da7cc5bd08450bf8448c14aab4bf1f49ccb2885f2813a699fdc21f",
+        "active": true
+      },
+      "NFLX": {
+        "token": "0x3b8262A63d25f0477c4DDE23F83cfe22Cb768C93",
+        "registeredAt": "block 125886145",
+        "tx": "0x5e36d33638021dece2cb748e809f67154f528ec4cbc8aa26e0138550852926c3",
+        "active": true
+      }
+    },
+    "deactivations": {
+      "0xD63Fd09c46A96fF73B9EC7b941AFf784C4C9f3EF (legacy demo AMZN)": {
+        "tx": "0x9a407726924b8c1549a70dda21df7d557b1212bdf22732142e22e28710e575a7",
+        "block": 125885770
+      },
+      "0xCb0f9186fd6F4c5f9DC3E30e649EF8203908a00B (legacy demo PLTR)": {
+        "tx": "0x34cfedf013a78861dce8504623b7e912fcd75423269df4aac9efc103c715aab5",
+        "block": 125885820
+      },
+      "0x9AAaE34Cb66A4AA5241C0eB9cB196CcA02E58b63 (legacy demo AMD)": {
+        "tx": "0xea78b55edb461aa7d0a991d7b5584b92a1451b87e4670e530d51d67cd5047f73",
+        "block": 125885854
+      },
+      "0x29377502470c570AAef1c5A28cd1d42Ce6669edF (legacy demo NFLX)": {
+        "tx": "0xed6599f86a61fd8cac993e6c5d8147c8df7354a2100ed49f7b80e8428d4b8b98",
+        "block": 125885892
+      }
+    },
+    "nflxReactivation": {
+      "_readme": "NFLX was registered during the 2026-09-28 migration and then closed the same day (0x74bf9cd5..., block 125886204, active=false). It was reactivated on 2026-09-29 by the registry owner via the existing setAssetActive(address,bool) — no redeployment. Live getAsset(NFLX) now reads active=true, registered=true, feed=0x8C3535B6F4bF1CfBe9Ed31fF669e173d8b594819.",
+      "deactivatedTx": "0x74bf9cd5ee36ea0b49450c409cab2020faba7ebb6ceb54c417e9a9d410a94431",
+      "deactivatedBlock": 125886204,
+      "reactivatedTx": "0x792a1a77d084a6103cfd73ca12c5a6f0134832be73ba1bb6a3a81d404faee6b6",
+      "reactivatedBlock": 126082314,
+      "reactivatedAt": "2026-09-29"
+    }
+  }
 }
