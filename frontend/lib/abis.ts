@@ -109,6 +109,27 @@ export const noteAbi = [
       { name: "required", type: "uint256" },
     ],
   },
+  // Errors create() can surface, declared so viem names them instead of handing the UI a
+  // raw selector. Nested reverts (vault reserveFor, the oracle price read, the ERC-20
+  // premium pull) bubble up through create's own revert data, so they decode from here.
+  { type: "error", name: "UnsupportedAsset", inputs: [] },
+  { type: "error", name: "AssetInactive", inputs: [] },
+  { type: "error", name: "InvalidAmount", inputs: [] },
+  { type: "error", name: "InvalidLevel", inputs: [] },
+  { type: "error", name: "InvalidDuration", inputs: [] },
+  {
+    type: "error",
+    name: "AssetConcentration",
+    inputs: [
+      { name: "asset", type: "address" },
+      { name: "exposure", type: "uint256" },
+      { name: "cap", type: "uint256" },
+    ],
+  },
+  { type: "error", name: "InsufficientCapacity", inputs: [] },
+  { type: "error", name: "TransferFailed", inputs: [] },
+  { type: "error", name: "StalePrice", inputs: [] },
+  { type: "error", name: "InvalidPrice", inputs: [] },
   {
     type: "event",
     name: "NoteCreated",
@@ -337,5 +358,17 @@ export const mockUSDGAbi = [
     stateMutability: "nonpayable",
     inputs: [],
     outputs: [],
+  },
+  {
+    name: "faucetCooldownRemaining",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "FaucetCooldown",
+    type: "error",
+    inputs: [{ name: "nextAt", type: "uint256" }],
   },
 ] as const;

@@ -2,11 +2,22 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useAccount, useChainId, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { decodeEventLog, formatUnits } from "viem";
 import { SegmentedControl, Eyebrow, TxStatus, IconAlert, type TxFail } from "@/components/ui";
 import { TokenLogo } from "@/components/TokenLogo";
 import { useDeployed, useAssets, settlementTokenFor, parseTokenAmount, usd18ToToken } from "@/lib/protocol";
+import {
+  hasEnoughUsdg as fundingHasEnoughUsdg,
+  decodeCreateError,
+  decodeFaucetError,
+  createButtonLabel,
+  canSubmitCreate,
+  isFaucetNeeded,
+  formatFaucetCooldown,
+  isFaucetSurface,
+} from "@/lib/funding";
 import { noteAbi, erc20Abi, mockUSDGAbi } from "@/lib/abis";
 import { robinhoodTestnet } from "@/lib/chain";
 import { NETWORK } from "@/lib/network";
@@ -86,12 +97,28 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     query: { enabled: !!address && !!deployed && !!st?.address, refetchInterval: 15_000 },
   });
 
-  const { data: usdgBalance } = useReadContract({
+  const {
+    data: usdgBalance,
+    refetch: refetchUsdgBalance,
+  } = useReadContract({
     address: st?.address,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
     query: { enabled: !!address && !!st?.address, refetchInterval: 15_000 },
+  });
+
+  // Faucet exposure is double-gated (chain 46630 AND the mock address) — see isFaucetSurface.
+  const isMockUSDG = isFaucetSurface(chainId, st?.address);
+
+  // Deployed MockUSDG exposes faucetCooldownRemaining(address) — verified live on 46630.
+  // Read it so the user sees the remaining wait instead of discovering it via a revert.
+  const { data: faucetCooldown } = useReadContract({
+    address: st?.address,
+    abi: mockUSDGAbi,
+    functionName: "faucetCooldownRemaining",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && isMockUSDG, refetchInterval: 60_000 },
   });
 
   // Approve and create get separate write slots. Sharing one meant the approval receipt
@@ -157,27 +184,48 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     if (approveReceipt.isSuccess) refetchAllowance();
   }, [approveReceipt.isSuccess, refetchAllowance]);
 
+  // Every confirmed tx that moves USDG refetches the balance immediately — the 15s poll
+  // alone left users staring at a stale "insufficient" state after a successful faucet claim.
+  useEffect(() => {
+    if (faucetReceipt.isSuccess || createReceipt.isSuccess) refetchUsdgBalance();
+  }, [faucetReceipt.isSuccess, createReceipt.isSuccess, refetchUsdgBalance]);
+
   const approving = approveWaiting || approveReceipt.isLoading;
   const buying = createWaiting || createReceipt.isLoading;
   const needsApproval = !!quote && allowance !== undefined && allowance < premiumToken;
   const allowanceUnknown = !!quote && allowance === undefined;
 
-  const isMockUSDG = chainId === 46630 && st?.address?.toLowerCase() === "0x8c4aa106a0a0d9ecaed5c87e1ae766aa8efbf006";
   const usdgBalanceUnknown = usdgBalance === undefined && !!quote;
-  const hasEnoughUsdg = !usdgBalanceUnknown && usdgBalance !== undefined && usdgBalance >= premiumToken;
+  const hasEnoughUsdg = fundingHasEnoughUsdg({ balance: usdgBalance, premium: premiumToken });
 
   const readyToAct = isConnected && !!deployed && chainId === robinhoodTestnet.id && !!selected;
-  const canApprove = readyToAct && !!quote && !!needsApproval && !approving && !buying && hasEnoughUsdg;
-  const canCreate =
-    readyToAct && !!quote && holdsEnough && !needsApproval && !allowanceUnknown && !approving && !buying && hasEnoughUsdg;
+  // Approve only once the wallet can actually pay; create only when funded AND allowed.
+  // canSubmitCreate encodes the same order the contract enforces (pull premium, then
+  // reserve), so a create is never submitted that is guaranteed to revert.
+  const canApprove = readyToAct && !!quote && needsApproval && !approving && !buying && hasEnoughUsdg;
+  const canCreate = canSubmitCreate({
+    ready: readyToAct,
+    quote: !!quote,
+    balance: usdgBalance,
+    premium: premiumToken,
+    allowance,
+    overPosition: overPosition || !holdsEnough,
+    busy: approving || buying,
+  });
 
   function approve() {
     if (!deployed || !st || !premiumToken) return;
+    if (approving || buying) return;
     writeApprove({ address: st.address, abi: erc20Abi, functionName: "approve", args: [deployed.vault, premiumToken] });
   }
 
   function create() {
     if (!deployed || !selected || !quote || !st) return;
+    if (buying || approving) return;
+    // Belt-and-braces: the button is already disabled, but never submit a create the
+    // vault cannot collect — a premium pull from an underfunded wallet is a guaranteed revert.
+    if (usdgBalance !== undefined && usdgBalance < premiumToken) return;
+    if (allowance !== undefined && allowance < premiumToken) return;
     const [premiumUSD, protectedUSD, expiry] = quote;
     submitted.current = {
       qty: fmtQty(amountWei, selected.decimals),
@@ -203,10 +251,13 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     submitted.current = null;
   }
 
+  // Decode the known create reverts into actionable text; anything else surfaces raw so a
+  // failed tx can never read as a success.
   const createFail = createError
-    ? /InsufficientPosition/.test(`${createError.message} ${(createError as { shortMessage?: string }).shortMessage ?? ""}`)
-      ? "you must hold the stock you are protecting — reduce the amount"
-      : createError.message.slice(0, 120)
+    ? decodeCreateError(
+        `${createError.message} ${(createError as { shortMessage?: string }).shortMessage ?? ""}`,
+        st?.symbol ?? "USDG"
+      )
     : null;
 
   const quoteFail = quoteQuery.error
@@ -235,7 +286,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
                   ? "Checking your USDG balance…"
                   : !hasEnoughUsdg
                     ? isMockUSDG
-                      ? `You need ${fmtToken(premiumToken, st?.decimals ?? 6, st?.symbol)} to cover the premium — claim test USDG first.`
+                      ? `You need ${fmtToken(premiumToken, st?.decimals ?? 6, st?.symbol)} to cover the premium — claim test USDG in Vault.`
                       : `Insufficient ${st?.symbol ?? "USDG"} balance to pay the premium.`
                     : allowanceUnknown
                       ? "Checking your USDG allowance…"
@@ -249,9 +300,11 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
       ? { kind: "pending", text: "Confirm in wallet…" }
       : createReceipt.isLoading
         ? { kind: "busy", text: "Waiting for confirmation…" }
-        : createFail
-          ? { kind: "error", text: `Failed: ${createFail}` }
-          : null;
+        : createReceipt.data?.status === "reverted"
+          ? { kind: "error", text: "Failed: the transaction reverted on-chain \u2014 nothing was collected" }
+          : createFail
+            ? { kind: "error", text: `Failed: ${createFail}` }
+            : null;
 
   const positionValue = (amountWei * (selected?.price8 ?? 0n)) / 10n ** 8n;
 
@@ -262,31 +315,43 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
     </p>
   ) : null;
 
-  const faucetNeeded = isMockUSDG && !!quote && !!usdgBalance && usdgBalance < premiumToken;
+  // Real 0n is a genuine zero balance — only undefined means "still loading". A bigint
+  // must never be tested with truthiness: `!!0n` is false and hid the insufficient state.
+  const faucetNeeded = isFaucetNeeded({ balance: usdgBalance, premium: premiumToken, quote: !!quote, faucetSurface: isMockUSDG });
+
+  const faucetErrorText = faucetError
+    ? decodeFaucetError(`${faucetError.message} ${(faucetError as { shortMessage?: string }).shortMessage ?? ""}`)
+    : null;
 
   const actions = successOpen ? null : (
     <div className="space-y-3">
       {blockerLine}
-      {faucetNeeded && !needsApproval ? (
+      {faucetNeeded ? (
         <div className="space-y-1">
           <button
             onClick={() => writeFaucet({ address: st!.address, abi: mockUSDGAbi, functionName: "faucet" })}
-            disabled={faucetPending}
+            disabled={faucetPending || faucetReceipt.isLoading}
             className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm"
           >
             {faucetPending || faucetReceipt.isLoading ? "Claiming…" : `Get test ${st?.symbol ?? "USDG"}`}
           </button>
-          {faucetError ? (
-            <p className="text-xs text-loss">
-              {faucetError.message.includes("FaucetCooldown") ? "Cooldown active — try again later" : faucetError.message.slice(0, 120)}
+          <Link href="/vault" className="block text-center text-xs text-action hover:underline">
+            Need test USDG? Claim it on the Vault page &rarr;
+          </Link>
+          {faucetErrorText ? <p className="text-xs text-loss">{faucetErrorText}</p> : null}
+          {!faucetErrorText && faucetCooldown !== undefined && faucetCooldown > 0n ? (
+            <p className="text-xs text-mist">
+              Faucet cooldown: next claim in {formatFaucetCooldown(faucetCooldown)} — 1,000 USDG per address per 24h.
             </p>
           ) : null}
           {faucetReceipt.isSuccess ? (
-            <p className="text-xs text-success">Faucet claimed — balances refreshing…</p>
+            <p className="text-xs text-action">Faucet claimed — balance refreshing, approve unlocks next.</p>
           ) : null}
         </div>
       ) : null}
-      {needsApproval ? (
+      {/* Approval is only offered once the wallet can actually pay the premium — an
+          allowance on an underfunded balance just queues a guaranteed revert. */}
+      {needsApproval && !faucetNeeded ? (
         <div className="space-y-1">
           <button onClick={approve} disabled={!canApprove} className="btn-ghost w-full rounded-2xl px-4 py-3 text-sm">
             {approving ? "Approving…" : `Approve ${st?.symbol ?? "USDG"}`}
@@ -299,7 +364,7 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
         </div>
       ) : null}
       <button onClick={create} disabled={!canCreate} className="btn-action w-full rounded-2xl px-4 py-3.5 text-sm">
-        {needsApproval ? "Approve first" : overPosition ? "More than you hold" : "Buy protection"}
+        {createButtonLabel({ faucetNeeded, needsApproval, overPosition, balance: usdgBalance, premium: premiumToken })}
       </button>
       <TxStatus state={txState} />
     </div>
