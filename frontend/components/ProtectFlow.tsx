@@ -617,6 +617,11 @@ export function ProtectFlow({ variant = "page" }: { variant?: "page" | "card" })
                 <Row label="Maximum payout" value={fmtUsd18(protectedUSD18)} />
                 <Row label="Expires" value={fmtExpiry(quote[2])} />
               </dl>
+              <p className="mt-4 border-t border-line/60 pt-3 text-xs leading-relaxed text-mist">
+                If the price settles below your floor you’re paid the difference for each token you still hold — e.g. a
+                $160 floor settling at $140 pays $20 per token. At or above the floor there’s no payout; your stock and
+                its upside stay yours.
+              </p>
             </>
           ) : (
             <p className="mt-4 text-sm text-mist">
@@ -659,13 +664,14 @@ function AssetSelect({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 min-w-[120px] justify-between"
+        className="flex items-center gap-2 min-w-[100px] max-w-[140px] justify-between rounded-xl border border-line bg-surface px-2.5 py-1.5 hover:border-mist/40"
       >
-        <span className="truncate text-sm text-ink">{selected ? selected.name ?? selected.symbol : "Select"}</span>
-        <span className="text-[10px] text-mist">▼</span>
+        {selected ? <TokenLogo symbol={selected.symbol} className="h-5 w-5 shrink-0" /> : null}
+        <span className="truncate text-xs font-medium text-ink">{selected ? selected.name ?? selected.symbol : "Select"}</span>
+        <span className="text-[10px] text-mist shrink-0">▼</span>
       </button>
       {open && (
-        <div className="absolute right-0 left-auto w-[320px] top-full z-20 mt-2 max-h-80 overflow-auto rounded-2xl border border-line bg-surface-2 shadow-xl p-1">
+        <div className="absolute left-0 right-0 z-20 mt-2 max-h-[70vh] w-[min(92vw,340px)] max-w-[340px] overflow-auto rounded-2xl border border-line bg-surface-2 shadow-xl p-1">
           {assets.length === 0 ? (
             <div className="px-3 py-3 text-xs text-mist">No active assets</div>
           ) : (

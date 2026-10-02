@@ -162,6 +162,16 @@ export function Header({ variant = "app" }: { variant?: "app" | "landing" }) {
 
           {variant !== "landing" ? <ConnectButton /> : null}
         </div>
+
+        {/* Ambient testnet banner — the demo context must be visible on every app page,
+            not only in the dashboard footnote and the landing footer. */}
+        {variant === "app" ? (
+          <div className="border-t border-line/60 bg-surface-3/70 px-4 py-1.5 text-center">
+            <span className="text-[11px] text-mist">
+              Testnet demo — test tokens only, prices are owner-set fixtures.
+            </span>
+          </div>
+        ) : null}
       </header>
 
       {/* Mobile tab bar — peers, not a drawer. Fixed, blurred, safe-area aware. The

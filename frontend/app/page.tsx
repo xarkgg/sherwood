@@ -59,6 +59,33 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* The primitive in three steps — the whole mechanism before the market board. */}
+        <section className="mx-auto max-w-5xl px-5 pb-14 pt-12 sm:px-6">
+          <div className="grid gap-8 sm:grid-cols-3">
+            <div>
+              <span className="font-display text-2xl font-bold text-action">1</span>
+              <span className="mt-1 block text-sm font-bold text-ink">Pick your floor</span>
+              <span className="mt-1 block text-xs leading-relaxed text-mist">
+                Choose a stock you hold and set the floor at 70, 80 or 90% of today's price.
+              </span>
+            </div>
+            <div>
+              <span className="font-display text-2xl font-bold text-action">2</span>
+              <span className="mt-1 block text-sm font-bold text-ink">Pay one fixed cost</span>
+              <span className="mt-1 block text-xs leading-relaxed text-mist">
+                A small premium up front — the vault reserves your payout in collateral the moment you buy.
+              </span>
+            </div>
+            <div>
+              <span className="font-display text-2xl font-bold text-action">3</span>
+              <span className="mt-1 block text-sm font-bold text-ink">We pay the gap</span>
+              <span className="mt-1 block text-xs leading-relaxed text-mist">
+                If the price settles below your floor, you're reimbursed the difference. Above it, every gain stays yours.
+              </span>
+            </div>
+          </div>
+        </section>
+
         <section className="dot-grid bg-surface">
           <div className="mx-auto max-w-6xl px-5 pb-16 pt-12 sm:px-6">
             <LandingFloors />

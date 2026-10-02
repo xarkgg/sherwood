@@ -54,6 +54,11 @@ export default function Notes() {
             Each row is one protection you bought: the floor you set, what it cost, and what it paid. Every price and
             payout here can be checked on-chain.
           </p>
+          <p className="mt-2 text-xs text-mist">
+            A note covers the shares you still hold when it settles — sell them and that part is uncovered; the note
+            still settles and the reserved collateral releases. Claims close a fixed window after expiry — the exact
+            deadline prints on each note.
+          </p>
         </section>
 
         <div className="mt-8 space-y-2">
@@ -81,6 +86,7 @@ export default function Notes() {
               <NoteCard
                 key={n.id.toString()}
                 note={n}
+                userIndex={i + 1}
                 symbol={assets.find((a) => a.token === n.asset)?.symbol ?? "?"}
                 decimals={assets.find((a) => a.token === n.asset)?.decimals ?? 18}
                 stDecimals={st?.decimals ?? 6}
@@ -107,6 +113,7 @@ export default function Notes() {
 
 function NoteCard({
   note,
+  userIndex,
   symbol,
   decimals,
   stDecimals,
@@ -116,6 +123,7 @@ function NoteCard({
   delay,
 }: {
   note: NoteView;
+  userIndex: number;
   symbol: string;
   decimals: number;
   stDecimals: number;
@@ -173,9 +181,9 @@ function NoteCard({
                 target="_blank"
                 rel="noreferrer"
                 className="tnum ml-2 text-xs text-action hover:underline"
-                title="View note on explorer"
+                title={`Global note #${note.id.toString()}`}
               >
-                #{note.id.toString()}
+                #{userIndex}
               </a>
             </div>
             <div className="tnum mt-0.5 truncate text-xs text-mist">

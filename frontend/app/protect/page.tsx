@@ -37,6 +37,10 @@ export default function Protect() {
             Choose a stock you hold and the price you want protected. You keep everything above it, and if the price
             falls below it you’re reimbursed the difference. The cost is fixed at purchase.
           </p>
+          <p className="mt-2 text-xs text-mist">
+            The flow: quote — priced by the chain, never estimated · approve — a one-time USDG allowance · create — your
+            floor is active and its payout reserved.
+          </p>
         </section>
 
         {assets.length === 0 ? (

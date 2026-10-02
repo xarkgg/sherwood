@@ -51,6 +51,9 @@ export function LandingFooter() {
           <span className="max-w-[240px] text-[11px] leading-relaxed text-mist">
             Nothing here is a real position, a real price, or a real payout.
           </span>
+          <span className="max-w-[240px] text-[11px] leading-relaxed text-mist">
+            A research prototype — not financial services, not advice.
+          </span>
         </div>
       </div>
     </footer>
