@@ -300,6 +300,7 @@ Adversarial evidence beats feature lists. Each row is a refusal that actually ha
 
 ## Honest limitations
 
+- **This is a research prototype, not a product offering.** A protection note on testnet demonstrates the mechanism — it is not insurance, not a financial service, and not investment advice. Anything beyond testnet starts with legal review.
 - **Contracts are unaudited.** 195 tests pin the math and the guards; no third party has reviewed them.
 - **Testnet prices are owner-set fixtures, not market data.** Robinhood Chain testnet publishes no stock feeds, so the registry points at `DemoFeed` stand-ins behind the same `AggregatorV3` interface. Mainnet is an address swap, not a code path — but until then, every price on the demo is a test fixture and is labelled as one.
 - **The settlement token on testnet is `MockUSDG`.** The official testnet USDG drip never funded a protocol wallet (observed live, escalated to Robinhood support), so the stack settles on a source-verified mock with a public faucet. Mainnet uses canonical USDG; `Config.s.sol` refuses the mock outright (`MockTokenOnMainnet`).
