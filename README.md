@@ -27,7 +27,7 @@ No wallet needed for any of these — every page reads live on-chain state:
 
 With a wallet: connect on chain 46630, open Vault, claim 1,000 test USDG from the faucet, approve, and buy protection on stock you hold. [Setup](#quick-start) below if you want to run it locally.
 
-> **Demo video — pending.** The recording is made after the UI is final; until then the live app is the demo.
+> **Demo video:** [Demo](https://youtu.be/qkU3QWeuxKA) · [Pitch](https://youtu.be/jnsGtEyziGo)
 
 ---
 
